@@ -1,5 +1,5 @@
 import type { IndentSheet, MasterSheet, ReceivedSheet, Sheet } from '@/types';
-import type { InventorySheet, PoMasterSheet, QuotationHistorySheet, UserPermissions, Vendor } from '@/types/sheets';
+import type { InventorySheet, PoMasterSheet, QuotationHistorySheet, StoreOutSheet, UserPermissions, Vendor } from '@/types/sheets';
 
 export async function uploadFile(file: File, folderId: string, uploadType: 'upload' | 'email' = 'upload', email?: string): Promise<string> {
     const base64: string = await new Promise((resolve, reject) => {
@@ -14,11 +14,13 @@ export async function uploadFile(file: File, folderId: string, uploadType: 'uplo
 
     const form = new FormData();
     form.append('action', 'upload');
+    form.append('sheetName', 'PO MASTER'); // Required by backend validation
     form.append('fileName', file.name);
     form.append('mimeType', file.type);
     form.append('fileData', base64);
     form.append('folderId', folderId);
     form.append('uploadType', uploadType);
+
     if (uploadType === "email") {
         form.append('email', email!);
         form.append('emailSubject', "Purchase Order");
@@ -31,10 +33,8 @@ export async function uploadFile(file: File, folderId: string, uploadType: 'uplo
         redirect: 'follow',
     });
 
-    console.log(response)
     if (!response.ok) throw new Error('Failed to upload file');
     const res = await response.json();
-    console.log(res)
     if (!res.success) throw new Error('Failed to upload data');
 
     return res.fileUrl as string;
@@ -105,41 +105,71 @@ export async function fetchSheet(
 // lib/fetchers.ts में या जहां postToSheet function है
 
 export async function postToQuotationHistory(rows: any[]) {
-  try {
-    const formData = new FormData();
-    formData.append('action', 'insertQuotation');
-    formData.append('rows', JSON.stringify(rows));
+    try {
+        const formData = new FormData();
+        formData.append('action', 'insertQuotation');
+        formData.append('rows', JSON.stringify(rows));
 
-    const response = await fetch(import.meta.env.VITE_APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: formData,
-    });
+        const response = await fetch(import.meta.env.VITE_APPS_SCRIPT_URL, {
+            method: 'POST',
+            body: formData,
+        });
 
-    const result = await response.json();
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to submit quotation');
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to submit quotation');
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error posting quotation:', error);
+        throw error;
     }
-
-    return result;
-  } catch (error) {
-    console.error('Error posting quotation:', error);
-    throw error;
-  }
 }
 
 
 export async function fetchVendors() {
-  try {
-    const response = await fetch(
-      `${import.meta.env.VITE_APP_SCRIPT_URL}?sheetName=MASTER&fetchType=vendors`
-    );
-    const data = await response.json();
-    return data.vendors || [];
-  } catch (error) {
-    console.error('Error fetching vendors:', error);
-    return [];
-  }
+    try {
+        const response = await fetch(
+            `${import.meta.env.VITE_APP_SCRIPT_URL}?sheetName=MASTER&fetchType=vendors`
+        );
+        const data = await response.json();
+        return data.vendors || [];
+    } catch (error) {
+        console.error('Error fetching vendors:', error);
+        return [];
+    }
+}
+
+export async function postStoreOutToSheet(data: Partial<StoreOutSheet>[]) {
+    const form = new FormData();
+    form.append('action', 'insert');
+    form.append('sheetName', 'STORE OUT');
+    form.append('rows', JSON.stringify(data));
+
+    try {
+        const response = await fetch(import.meta.env.VITE_APP_SCRIPT_URL, {
+            method: 'POST',
+            body: form,
+            redirect: 'follow',
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to submit Store Out data: ${response.statusText}`);
+        }
+
+        const res = await response.json();
+
+        if (!res.success) {
+            throw new Error(res.message || res.error || 'Failed to submit Store Out data');
+        }
+
+        return res;
+    } catch (error) {
+        console.error("Error in postStoreOutToSheet:", error);
+        throw error;
+    }
 }
 
 export async function postToSheet(
@@ -148,27 +178,37 @@ export async function postToSheet(
         | Partial<ReceivedSheet>[]
         | Partial<UserPermissions>[]
         | Partial<PoMasterSheet>[]
-        | Partial<QuotationHistorySheet>[],
-    action: 'insert' | 'update' | 'delete' | 'insertQuotation' = 'insert', // Add insertQuotation
+        | Partial<QuotationHistorySheet>[]
+        | Partial<StoreOutSheet>[],
+    action: 'insert' | 'update' | 'delete' | 'insertQuotation' = 'insert',
     sheet: Sheet = 'INDENT'
 ) {
+    // Original logic for other sheets
     const form = new FormData();
     form.append('action', action);
     form.append('sheetName', sheet);
     form.append('rows', JSON.stringify(data));
+
     const response = await fetch(import.meta.env.VITE_APP_SCRIPT_URL, {
         method: 'POST',
         body: form,
+        redirect: 'follow', // Important!
     });
+
     if (!response.ok) {
         console.error(`Error in fetch: ${response.status} - ${response.statusText}`);
+        const text = await response.text();
+        console.error("Response text:", text);
         throw new Error(`Failed to ${action} data`);
     }
+
     const res = await response.json();
+
     if (!res.success) {
-        console.error(`Error in response: ${res.message}`);
-        throw new Error('Something went wrong in the API');
+        console.error(`Error in response: ${res.message || res.error}`);
+        throw new Error(res.error || 'Something went wrong in the API');
     }
+
     return res;
 }
 // Add this new function in fetchers.ts
@@ -181,11 +221,11 @@ export async function postToMasterSheet(data: any[]) {
             },
             body: JSON.stringify(data),
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to post to master sheet');
         }
-        
+
         return await response.json();
     } catch (error) {
         console.error('Error posting to master sheet:', error);

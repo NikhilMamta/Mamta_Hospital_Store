@@ -230,22 +230,14 @@ export default () => {
                     const seconds = String(now.getSeconds()).padStart(2, '0');
                     const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
 
-                    // Create dataToSend without timestamp
-                    const { timestamp, ...sheetWithoutTimestamp } = originalSheet;
-
                     const dataToSend = {
-                        ...sheetWithoutTimestamp, // Spread without timestamp
+                        rowIndex: (originalSheet as any).rowIndex,
+                        indentNumber: originalSheet.indentNumber,
                         vendorType: update.vendorType || originalSheet.vendorType,
                         approvedQuantity: update.quantity !== undefined ? update.quantity : originalSheet.quantity,
-                        // H column (quantity) bhi approved ke equal
-                        quantity: update.quantity !== undefined ? update.quantity : originalSheet.quantity,
-                        actual1: formattedDate,
+                        quantity: originalSheet.quantity, // Keep original quantity
+                        actual1: formatDate(new Date()),
                     };
-
-                    console.log('🔍 After creating object:', dataToSend);
-                    console.log('dataToSend.actual1:', dataToSend.actual1);
-                    console.log('typeof dataToSend.actual1:', typeof dataToSend.actual1);
-                    console.log('Full object:', JSON.stringify(dataToSend, null, 2));
 
                     return dataToSend;
                 })
@@ -341,9 +333,9 @@ export default () => {
 
                 await postToSheet(
                     rowsToUpdate.map((prev) => ({
-                        ...prev,
-                        productName: newProductName,
-                        timestamp: prev.timestamp, // Keep original
+                        rowIndex: (prev as any).rowIndex,
+                        indentNumber: prev.indentNumber,
+                        productName: newProductName!,
                     })),
                     'update'
                 );
@@ -353,14 +345,16 @@ export default () => {
                 await postToSheet(
                     indentSheet
                         .filter((s) => s.indentNumber === indentNo)
-                        .map((prev) => ({
-                            ...prev,
-                            approvedQuantity: editValues.approvedQuantity,
-                            uom: editValues.uom,
-                            vendorType: editValues.vendorType,
-                            productName: editValues.product,
-                            timestamp: prev.timestamp, // Keep original
-                        })),
+                        .map((prev) => {
+                            return {
+                                rowIndex: (prev as any).rowIndex,
+                                indentNumber: prev.indentNumber,
+                                approvedQuantity: editValues.approvedQuantity,
+                                uom: editValues.uom,
+                                vendorType: editValues.vendorType,
+                                productName: editValues.product,
+                            };
+                        }),
                     'update'
                 );
                 toast.success(`Updated indent ${indentNo}`);
@@ -556,7 +550,8 @@ export default () => {
                             indentSheet
                                 .filter((s) => s.indentNumber === indentNo)
                                 .map((prev) => ({
-                                    ...prev,
+                                    rowIndex: (prev as any).rowIndex,
+                                    indentNumber: prev.indentNumber,
                                     specifications: value,
                                 })),
                             'update'

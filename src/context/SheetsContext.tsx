@@ -1,5 +1,5 @@
 import { fetchSheet } from '@/lib/fetchers';
-import type { IndentSheet, InventorySheet, MasterSheet, PoMasterSheet, ReceivedSheet } from '@/types';
+import type { IndentSheet, InventorySheet, MasterSheet, PoMasterSheet, ReceivedSheet, StoreOutSheet } from '@/types';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -7,15 +7,18 @@ interface SheetsState {
     updateReceivedSheet: () => void;
     updatePoMasterSheet: () => void;
     updateIndentSheet: () => void;
+    updateStoreOutSheet: () => void;
     updateAll: () => void;
 
     indentSheet: IndentSheet[];
+    storeOutSheet: StoreOutSheet[];
     poMasterSheet: PoMasterSheet[];
     receivedSheet: ReceivedSheet[];
     inventorySheet: InventorySheet[];
     masterSheet: MasterSheet | undefined;
 
     indentLoading: boolean;
+    storeOutLoading: boolean;
     poMasterLoading: boolean;
     receivedLoading: boolean;
     inventoryLoading: boolean;
@@ -26,12 +29,14 @@ const SheetsContext = createContext<SheetsState | null>(null);
 
 export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     const [indentSheet, setIndentSheet] = useState<IndentSheet[]>([]);
+    const [storeOutSheet, setStoreOutSheet] = useState<StoreOutSheet[]>([]);
     const [receivedSheet, setReceivedSheet] = useState<ReceivedSheet[]>([]);
     const [poMasterSheet, setPoMasterSheet] = useState<PoMasterSheet[]>([]);
     const [inventorySheet, setInventorySheet] = useState<InventorySheet[]>([]);
     const [masterSheet, setMasterSheet] = useState<MasterSheet>();
 
     const [indentLoading, setIndentLoading] = useState(true);
+    const [storeOutLoading, setStoreOutLoading] = useState(true);
     const [poMasterLoading, setPoMasterLoading] = useState(true);
     const [receivedLoading, setReceivedLoading] = useState(true);
     const [inventoryLoading, setInventoryLoading] = useState(true);
@@ -42,6 +47,14 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
         fetchSheet('INDENT').then((res) => {
             setIndentSheet(res as IndentSheet[]);
             setIndentLoading(false);
+        });
+    }
+
+    function updateStoreOutSheet() {
+        setStoreOutLoading(true);
+        fetchSheet('STORE OUT').then((res) => {
+            setStoreOutSheet(res as any as StoreOutSheet[]);
+            setStoreOutLoading(false);
         });
     }
     function updateReceivedSheet() {
@@ -78,6 +91,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
         updateMasterSheet();
         updateReceivedSheet();
         updateIndentSheet();
+        updateStoreOutSheet();
         updatePoMasterSheet();
         updateInventorySheet();
         setAllLoading(false);
@@ -97,14 +111,17 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
         <SheetsContext.Provider
             value={{
                 updateIndentSheet,
+                updateStoreOutSheet,
                 updatePoMasterSheet,
                 updateReceivedSheet,
                 updateAll,
                 indentSheet,
+                storeOutSheet,
                 poMasterSheet,
                 inventorySheet,
                 receivedSheet,
                 indentLoading,
+                storeOutLoading,
                 masterSheet,
                 poMasterLoading,
                 receivedLoading,

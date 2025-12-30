@@ -4,22 +4,28 @@ import type { UseFormReturn, UseFieldArrayRemove } from 'react-hook-form'; // Im
 // Zod schema definitions
 export const productSchema = z.object({
     department: z.string().nonempty(),
-    groupHead: z.string().nonempty(),
-    productName: z.string().nonempty(),
+    groupHead: z.string().optional(),
+    productName: z.string().optional(),
     quantity: z.coerce.number().gt(0, 'Must be greater than 0'),
     uom: z.string().nonempty(),
     areaOfUse: z.string().nonempty(),
     priority: z.enum(['Low', 'Normal', 'High', 'Urgent'], {
         required_error: 'Select priority',
-    }),
+    }).optional(),
     attachment: z.instanceof(File).optional().nullable(), // Allow null for attachment
     specifications: z.string().optional(),
+    // New fields for Store Out
+    floor: z.string().optional(),
+    wardName: z.string().optional(),
+    category: z.string().optional(),
+    issueDate: z.string().optional(),
+    requestedBy: z.string().optional(),
 });
 
 export const formSchema = z.object({
-    indenterName: z.string().nonempty(),
-    approvedByWhom: z.string().nonempty(),
-    status: z.enum(['Purchase', 'Store Out'], {
+    indenterName: z.string().optional(),
+    indentApproveBy: z.string().optional(),
+    indentType: z.enum(['Purchase', 'Store Out'], {
         required_error: 'Select a status',
     }),
     products: z.array(productSchema).min(1, 'At least one product is required'),

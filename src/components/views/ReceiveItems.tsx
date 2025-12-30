@@ -74,7 +74,7 @@
 //     const [selectedIndent, setSelectedIndent] = useState<RecieveItemsData | null>(null);
 //     const [openDialog, setOpenDialog] = useState(false);
 //     const [loading, setLoading] = useState(false);
-    
+
 
 //     useEffect(() => {
 //         setTableData(
@@ -406,7 +406,7 @@
 //           console.log('here', 4);
 //             // Sirf actual5 (AS column - date) aur AU column (receive status) update karna hai
 //             const indentToUpdate = indentSheet.find((s) => s.indentNumber === selectedIndent?.indentNumber);
-            
+
 //             if (indentToUpdate) {
 //                 // Sirf wo fields bhejo jo update karni hain
 //                 const updatePayload: any = {
@@ -416,7 +416,7 @@
 //                     actual5: new Date().toISOString(), // AS column - date
 //                     receiveStatus: values.status, // AU column - receive status
 //                 };
-                
+
 //                 await postToSheet([updatePayload], 'update', 'INDENT');
 //             }
 //             console.log('here', 5);
@@ -444,7 +444,7 @@
 //                     >
 //                         <Truck size={50} className="text-primary" />
 //                     </Heading>
-                    
+
 //                     <TabsContent value="pending">
 //                         <DataTable
 //                             data={tableData}
@@ -1001,7 +1001,7 @@ export default () => {
                     transportingAmount: r.transportingAmount,
                 };
             })
-            .reverse()
+                .reverse()
         );
     }, [receivedSheet, indentSheet]);
 
@@ -1223,20 +1223,20 @@ export default () => {
                 );
             }
 
-        const rows: Partial<ReceivedSheet>[] = values.items.map((item) => ({
-    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+            const rows: Partial<ReceivedSheet>[] = values.items.map((item) => ({
+                timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
 
-    indentNumber: item.indentNumber,
-    poDate: selectedIndent?.poDate,
-    poNumber: selectedIndent?.poNumber,
-    vendor: selectedIndent?.vendor,
-    receivedStatus: values.status,
-    receivedQuantity: item.quantity,
-    uom: matchingIndents.find(i => i.indentNumber === item.indentNumber)?.uom,
-    billStatus: values.billReceived,
-    billAmount: values.billAmount,
-    photoOfBill: billPhotoUrl,
-}));
+                indentNumber: item.indentNumber,
+                poDate: selectedIndent?.poDate,
+                poNumber: selectedIndent?.poNumber,
+                vendor: selectedIndent?.vendor,
+                receivedStatus: values.status,
+                receivedQuantity: item.quantity,
+                uom: matchingIndents.find(i => i.indentNumber === item.indentNumber)?.uom,
+                billStatus: values.billReceived,
+                billAmount: values.billAmount,
+                photoOfBill: billPhotoUrl,
+            }));
 
 
             // Insert in RECEIVED sheet
@@ -1249,11 +1249,10 @@ export default () => {
                 );
 
                 if (indentToUpdate) {
-                    const updatePayload: any = {
+                    const updatePayload = {
                         rowIndex: (indentToUpdate as any).rowIndex,
-                        sheetName: 'INDENT',
                         indentNumber: indentToUpdate.indentNumber,
-                        actual5: new Date().toISOString(),
+                        actual5: formatDate(new Date()),
                         receiveStatus: values.status,
                     };
 

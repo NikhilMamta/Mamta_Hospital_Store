@@ -1,6 +1,7 @@
-export type Sheet = 'INDENT' | 'RECEIVED' | 'MASTER' | 'USER' | 'PO MASTER' | 'INVENTORY' | 'QUOTATION HISTORY';
+export type Sheet = 'INDENT' | 'RECEIVED' | 'MASTER' | 'USER' | 'PO MASTER' | 'INVENTORY' | 'QUOTATION HISTORY' | 'STORE OUT';
 
 export type IndentSheet = {
+    rowIndex?: number;
     timestamp: string;
     indentNumber: string;
     indenterName: string;
@@ -67,10 +68,37 @@ export type IndentSheet = {
     paymentType: string;
     advanceAmountIfAny: number;
     photoOfBill: string;
-    rate:number;
+    rate: number;
+};
+
+export type StoreOutSheet = {
+    rowIndex?: number;
+    timestamp: string;
+    issueNo: string;
+    indentNumber?: string; // Robustness
+    issueDate: string;
+    requestedBy: string;
+    floor: string;
+    wardName: string;
+    productName: string;
+    qty: number;
+    quantity?: number; // Robustness
+    unit: string;
+    uom?: string; // Robustness
+    department: string;
+    category: string;
+    groupHead?: string; // Robustness
+    areaOfUse: string;
+    indentType?: string;
+    planned: string;
+    actual: string;
+    timeDelay: number;
+    status: string;
+    approveQty: number;
 };
 
 export type ReceivedSheet = {
+    rowIndex?: number;
     timestamp: string;
     indentNumber: string;
     poDate: string;
@@ -92,6 +120,7 @@ export type ReceivedSheet = {
 };
 
 export type InventorySheet = {
+    rowIndex?: number;
     groupHead: string;
     itemName: string;
     uom: string;
@@ -108,6 +137,7 @@ export type InventorySheet = {
 };
 
 export type PoMasterSheet = {
+    rowIndex?: number;
     discountPercent: number;
     gstPercent: number;
     timestamp: string;
@@ -140,6 +170,9 @@ export type PoMasterSheet = {
     term8: string;
     term9: string;
     term10: string;
+    planned: string;
+    actual: string;
+    status: string;
 };
 
 export type Vendor = {
@@ -189,7 +222,7 @@ export type UserPermissions = {
     ordersView: boolean;
     poMaster: boolean;
     getPurchase: boolean;
-    
+
     // New permissions for Dashboard and Inventory
     dashboard: boolean;
     inventory: boolean;
@@ -221,6 +254,7 @@ export const allPermissionKeys = [
 
 
 export type QuotationHistorySheet = {
+    rowIndex?: number;
     timestamp: string;
     quatationNo: string;      // Note: matches sheet spelling
     supplierName: string;
@@ -232,5 +266,5 @@ export type QuotationHistorySheet = {
     qty: string;
     unit: string;
     pdfLink: string;
-    
+
 };

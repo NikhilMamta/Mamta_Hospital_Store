@@ -137,9 +137,9 @@ export default () => {
                 indentSheet
                     .filter((s) => s.indentNumber === indentNo)
                     .map((prev) => {
-                        const { timestamp, ...prevWithoutTimestamp } = prev;
                         return {
-                            ...prevWithoutTimestamp,
+                            rowIndex: (prev as any).rowIndex,
+                            indentNumber: prev.indentNumber,
                             quantity: editValues.quantity,
                             uom: editValues.uom,
                             vendorType: editValues.vendorType,
@@ -539,10 +539,10 @@ export default () => {
                 indentSheet
                     .filter((s) => s.indentNumber === selectedIndent?.indentNo)
                     .map((prev) => {
-                        const { timestamp, ...prevWithoutTimestamp } = prev;
                         return {
-                            ...prevWithoutTimestamp,
-                            actual2: getCurrentFormattedDateOnly(), // Updated format
+                            rowIndex: (prev as any).rowIndex,
+                            indentNumber: prev.indentNumber,
+                            actual2: formatDate(new Date()),
                             vendorName1: values.vendorName,
                             rate1: values.rate.toString(),
                             paymentTerm1: values.paymentTerm,
@@ -572,29 +572,17 @@ export default () => {
                 rate: z.coerce.number().gt(0),
                 paymentTerm: z.string().nonempty(),
             })
-        ).max(3).min(3),
+        ).max(10).min(1),
     });
 
     const threePartyForm = useForm<z.infer<typeof threePartySchema>>({
         resolver: zodResolver(threePartySchema),
         defaultValues: {
-            vendors: [
-                {
-                    vendorName: '',
-                    rate: 0,
-                    paymentTerm: '',
-                },
-                {
-                    vendorName: '',
-                    rate: 0,
-                    paymentTerm: '',
-                },
-                {
-                    vendorName: '',
-                    rate: 0,
-                    paymentTerm: '',
-                },
-            ],
+            vendors: Array.from({ length: 10 }, () => ({
+                vendorName: '',
+                rate: 0,
+                paymentTerm: '',
+            })),
         },
     });
 
@@ -617,19 +605,40 @@ export default () => {
                 indentSheet
                     .filter((s) => s.indentNumber === selectedIndent?.indentNo)
                     .map((prev) => {
-                        const { timestamp, ...prevWithoutTimestamp } = prev;
                         return {
-                            ...prevWithoutTimestamp,
-                            actual2: getCurrentFormattedDateOnly(), // Updated format
-                            vendorName1: values.vendors[0].vendorName,
-                            rate1: values.vendors[0].rate.toString(),
-                            paymentTerm1: values.vendors[0].paymentTerm,
-                            vendorName2: values.vendors[1].vendorName,
-                            rate2: values.vendors[1].rate.toString(),
-                            paymentTerm2: values.vendors[1].paymentTerm,
-                            vendorName3: values.vendors[2].vendorName,
-                            rate3: values.vendors[2].rate.toString(),
-                            paymentTerm3: values.vendors[2].paymentTerm,
+                            rowIndex: (prev as any).rowIndex,
+                            indentNumber: prev.indentNumber,
+                            actual2: formatDate(new Date()),
+                            vendorName1: values.vendors[0]?.vendorName || '',
+                            rate1: values.vendors[0]?.rate?.toString() || '',
+                            paymentTerm1: values.vendors[0]?.paymentTerm || '',
+                            vendorName2: values.vendors[1]?.vendorName || '',
+                            rate2: values.vendors[1]?.rate?.toString() || '',
+                            paymentTerm2: values.vendors[1]?.paymentTerm || '',
+                            vendorName3: values.vendors[2]?.vendorName || '',
+                            rate3: values.vendors[2]?.rate?.toString() || '',
+                            paymentTerm3: values.vendors[2]?.paymentTerm || '',
+                            vendorName4: values.vendors[3]?.vendorName || '',
+                            rate4: values.vendors[3]?.rate?.toString() || '',
+                            paymentTerm4: values.vendors[3]?.paymentTerm || '',
+                            vendorName5: values.vendors[4]?.vendorName || '',
+                            rate5: values.vendors[4]?.rate?.toString() || '',
+                            paymentTerm5: values.vendors[4]?.paymentTerm || '',
+                            vendorName6: values.vendors[5]?.vendorName || '',
+                            rate6: values.vendors[5]?.rate?.toString() || '',
+                            paymentTerm6: values.vendors[5]?.paymentTerm || '',
+                            vendorName7: values.vendors[6]?.vendorName || '',
+                            rate7: values.vendors[6]?.rate?.toString() || '',
+                            paymentTerm7: values.vendors[6]?.paymentTerm || '',
+                            vendorName8: values.vendors[7]?.vendorName || '',
+                            rate8: values.vendors[7]?.rate?.toString() || '',
+                            paymentTerm8: values.vendors[7]?.paymentTerm || '',
+                            vendorName9: values.vendors[8]?.vendorName || '',
+                            rate9: values.vendors[8]?.rate?.toString() || '',
+                            paymentTerm9: values.vendors[8]?.paymentTerm || '',
+                            vendorName10: values.vendors[9]?.vendorName || '',
+                            rate10: values.vendors[9]?.rate?.toString() || '',
+                            paymentTerm10: values.vendors[9]?.paymentTerm || '',
                             comparisonSheet: url,
                         };
                     }),
@@ -670,10 +679,10 @@ export default () => {
                 indentSheet
                     .filter((s) => s.indentNumber === selectedHistory?.indentNo)
                     .map((prev) => {
-                        const { timestamp, ...prevWithoutTimestamp } = prev;
                         return {
-                            ...prevWithoutTimestamp,
-                            actual2: getCurrentFormattedDateOnly(), // Updated format
+                            rowIndex: (prev as any).rowIndex,
+                            indentNumber: prev.indentNumber,
+                            actual2: formatDate(new Date()),
                             rate1: values.rate.toString(),
                             approvedRate: values.rate,
                         };
@@ -767,51 +776,79 @@ export default () => {
                                         defaultValue="0"
                                         className="grid gap-5 p-4 border rounded-md"
                                     >
-                                        <TabsList className="w-full p-1">
-                                            <TabsTrigger value="0">Vendor 1</TabsTrigger>
-                                            <TabsTrigger value="1">Vendor 2</TabsTrigger>
-                                            <TabsTrigger value="2">Vendor 3</TabsTrigger>
-                                        </TabsList>
+                                        <div className="overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+                                            <TabsList className="flex w-max min-w-full p-1 bg-muted rounded-lg h-12">
+                                                {Array.from({ length: 10 }).map((_, i) => (
+                                                    <TabsTrigger
+                                                        key={i}
+                                                        value={`${i}`}
+                                                        className="flex-none w-auto px-4 py-2 text-sm font-medium transition-all"
+                                                    >
+                                                        Vendor {i + 1}
+                                                    </TabsTrigger>
+                                                ))}
+                                            </TabsList>
+                                        </div>
+
                                         {fields.map((field, index) => (
                                             <TabsContent value={`${index}`} key={field.id}>
                                                 <div className="grid gap-3">
                                                     <FormField
                                                         control={threePartyForm.control}
                                                         name={`vendors.${index}.vendorName`}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Vendor Name</FormLabel>
-                                                                <Select
-                                                                    onValueChange={field.onChange}
-                                                                    value={field.value}
-                                                                >
-                                                                    <FormControl>
-                                                                        <SelectTrigger className="w-full">
-                                                                            <SelectValue placeholder="Select vendor" />
-                                                                        </SelectTrigger>
-                                                                    </FormControl>
-                                                                    <SelectContent>
-                                                                        <div className="max-h-[300px] overflow-y-auto">
-                                                                            {vendorsLoading ? (
-                                                                                <div className="py-6 text-center text-sm text-muted-foreground">
-                                                                                    Loading vendors...
-                                                                                </div>
-                                                                            ) : vendors?.length > 0 ? (
-                                                                                vendors.map((vendor, i) => (
-                                                                                    <SelectItem key={i} value={vendor.vendorName}>
-                                                                                        {vendor.vendorName}
-                                                                                    </SelectItem>
-                                                                                ))
-                                                                            ) : (
-                                                                                <div className="py-6 text-center text-sm text-muted-foreground">
-                                                                                    No vendors available
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </FormItem>
-                                                        )}
+                                                        render={({ field }) => {
+                                                            const filteredVendors = vendors?.filter(vendor =>
+                                                                vendor.vendorName.toLowerCase().includes(vendorSearch.toLowerCase())
+                                                            );
+
+                                                            return (
+                                                                <FormItem>
+                                                                    <FormLabel>Vendor Name</FormLabel>
+                                                                    <Select
+                                                                        onValueChange={field.onChange}
+                                                                        value={field.value}
+                                                                        onOpenChange={(open) => {
+                                                                            if (!open) setVendorSearch("");
+                                                                        }}
+                                                                    >
+                                                                        <FormControl>
+                                                                            <SelectTrigger className="w-full">
+                                                                                <SelectValue placeholder="Select vendor" />
+                                                                            </SelectTrigger>
+                                                                        </FormControl>
+                                                                        <SelectContent>
+                                                                            <div className="flex items-center border-b px-3 pb-2">
+                                                                                <Input
+                                                                                    placeholder="Search vendors..."
+                                                                                    className="h-8 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                                                    value={vendorSearch}
+                                                                                    onChange={(e) => setVendorSearch(e.target.value)}
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    onKeyDown={(e) => e.stopPropagation()}
+                                                                                />
+                                                                            </div>
+                                                                            <div className="max-h-[200px] overflow-y-auto">
+                                                                                {vendorsLoading ? (
+                                                                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                                                                        Loading vendors...
+                                                                                    </div>
+                                                                                ) : filteredVendors?.length > 0 ? (
+                                                                                    filteredVendors.map((vendor, i) => (
+                                                                                        <SelectItem key={i} value={vendor.vendorName}>
+                                                                                            {vendor.vendorName}
+                                                                                        </SelectItem>
+                                                                                    ))
+                                                                                ) : (
+                                                                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                                                                        No vendors found
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </FormItem>
+                                                            );
+                                                        }}
                                                     />
 
                                                     <FormField

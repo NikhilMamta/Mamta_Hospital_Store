@@ -79,7 +79,7 @@ export default () => {
                         [sheet.vendorName3, sheet.rate3.toString(), sheet.paymentTerm3],
                     ],
                 }))
-                
+
         );
         setHistoryData(
             indentSheet
@@ -97,7 +97,7 @@ export default () => {
                     date: new Date(sheet.timestamp).toDateString(),
                     vendor: [sheet.approvedVendorName, sheet.approvedRate.toString()],
                 }))
-                
+
         );
     }, [indentSheet]);
 
@@ -134,86 +134,86 @@ export default () => {
         { accessorKey: 'department', header: 'Department' },
         { accessorKey: 'product', header: 'Product' },
         { accessorKey: 'date', header: 'Date' },
-       {
-    accessorKey: 'vendors',
-    header: 'Vendors',
-    enableSorting: false,   // <-- ADD THIS
-    cell: ({ row }) => {
-        const vendors = row.original.vendors;
-        return (
-            <div className="grid place-items-center">
-                <div className="flex flex-col gap-1">
-                    {vendors.map((vendor) => (
-                        <span className="rounded-full text-xs px-3 py-1 bg-accent text-accent-foreground border border-accent-foreground">
-                            {vendor[0]} - ₹{vendor[1]}
-                        </span>
-                    ))}
-                </div>
-            </div>
-        );
-    },
-},
+        {
+            accessorKey: 'vendors',
+            header: 'Vendors',
+            enableSorting: false,   // <-- ADD THIS
+            cell: ({ row }) => {
+                const vendors = row.original.vendors;
+                return (
+                    <div className="grid place-items-center">
+                        <div className="flex flex-col gap-1">
+                            {vendors.map((vendor) => (
+                                <span className="rounded-full text-xs px-3 py-1 bg-accent text-accent-foreground border border-accent-foreground">
+                                    {vendor[0]} - ₹{vendor[1]}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                );
+            },
+        },
 
-       {
-    accessorKey: 'comparisonSheet',
-    header: 'Comparison Sheet',
-    enableSorting: false,    // <-- ADD THIS
-    cell: ({ row }) => {
-        const sheet = row.original.comparisonSheet;
-        return sheet ? (
-            <a href={sheet} target="_blank">Comparison Sheet</a>
-        ) : <></>;
-    },
-},
+        {
+            accessorKey: 'comparisonSheet',
+            header: 'Comparison Sheet',
+            enableSorting: false,    // <-- ADD THIS
+            cell: ({ row }) => {
+                const sheet = row.original.comparisonSheet;
+                return sheet ? (
+                    <a href={sheet} target="_blank">Comparison Sheet</a>
+                ) : <></>;
+            },
+        },
 
     ];
 
     const historyColumns: ColumnDef<HistoryData>[] = [
-                ...(user.updateVendorAction ? [
-                    {
-                            header: 'Action',
-                            cell: ({ row }: { row: Row<HistoryData> }) => {
-                                const indent = row.original;
-        
-                                return (
-                                    <div>
-                                        <DialogTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setSelectedHistory(indent);
-                                                }}
-                                            >
-                                                Update
-                                            </Button>
-                                        </DialogTrigger>
-                                    </div>
-                                );
-                            },
-                        },
-                ] : []),
+        ...(user.updateVendorAction ? [
+            {
+                header: 'Action',
+                cell: ({ row }: { row: Row<HistoryData> }) => {
+                    const indent = row.original;
+
+                    return (
+                        <div>
+                            <DialogTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSelectedHistory(indent);
+                                    }}
+                                >
+                                    Update
+                                </Button>
+                            </DialogTrigger>
+                        </div>
+                    );
+                },
+            },
+        ] : []),
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'indenter', header: 'Indenter' },
         { accessorKey: 'department', header: 'Department' },
         { accessorKey: 'product', header: 'Product' },
         { accessorKey: 'date', header: 'Date' },
-       {
-    accessorKey: 'vendor',
-    header: 'Vendor',
-    enableSorting: false,     // <-- ADD THIS
-    cell: ({ row }) => {
-        const vendor = row.original.vendor;
-        return (
-            <div className="grid place-items-center">
-                <div className="flex flex-col gap-1">
-                    <span className="rounded-full text-xs px-3 py-1 bg-accent text-accent-foreground border border-accent-foreground">
-                        {vendor[0]} - ₹{vendor[1]}
-                    </span>
-                </div>
-            </div>
-        );
-    },
-},
+        {
+            accessorKey: 'vendor',
+            header: 'Vendor',
+            enableSorting: false,     // <-- ADD THIS
+            cell: ({ row }) => {
+                const vendor = row.original.vendor;
+                return (
+                    <div className="grid place-items-center">
+                        <div className="flex flex-col gap-1">
+                            <span className="rounded-full text-xs px-3 py-1 bg-accent text-accent-foreground border border-accent-foreground">
+                                {vendor[0]} - ₹{vendor[1]}
+                            </span>
+                        </div>
+                    </div>
+                );
+            },
+        },
 
     ];
 
@@ -229,79 +229,79 @@ export default () => {
         },
     });
 
-   const getCurrentFormattedDateOnly = () => {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = now.getFullYear();
-    return `${day}/${month}/${year}`;
-};
+    const getCurrentFormattedDateOnly = () => {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
-async function onSubmit(values: z.infer<typeof schema>) {
-    try {
-        await postToSheet(
-            indentSheet
-                .filter((s) => s.indentNumber === selectedIndent?.indentNo)
-                .map((prev) => {
-                    const { timestamp, ...prevWithoutTimestamp } = prev;
-                    return {
-                        ...prevWithoutTimestamp,
-                        actual3: getCurrentFormattedDateOnly(), // Date only format
-                        approvedVendorName: selectedIndent?.vendors[values.vendor][0],
-                        approvedRate: selectedIndent?.vendors[values.vendor][1],
-                        approvedPaymentTerm: selectedIndent?.vendors[values.vendor][2],
-                    };
-                }),
-            'update'
-        );
-        toast.success(`Approved vendor for ${selectedIndent?.indentNo}`);
-        setOpenDialog(false);
-        form.reset();
-        setTimeout(() => updateIndentSheet(), 1000);
-    } catch {
-        toast.error('Failed to update vendor');
+    async function onSubmit(values: z.infer<typeof schema>) {
+        try {
+            await postToSheet(
+                indentSheet
+                    .filter((s) => s.indentNumber === selectedIndent?.indentNo)
+                    .map((prev) => {
+                        return {
+                            rowIndex: (prev as any).rowIndex,
+                            indentNumber: prev.indentNumber,
+                            actual3: formatDate(new Date()), // Date format
+                            approvedVendorName: selectedIndent?.vendors[values.vendor][0],
+                            approvedRate: selectedIndent?.vendors[values.vendor][1],
+                            approvedPaymentTerm: selectedIndent?.vendors[values.vendor][2],
+                        };
+                    }),
+                'update'
+            );
+            toast.success(`Approved vendor for ${selectedIndent?.indentNo}`);
+            setOpenDialog(false);
+            form.reset();
+            setTimeout(() => updateIndentSheet(), 1000);
+        } catch {
+            toast.error('Failed to update vendor');
+        }
     }
-}
 
-      const historyUpdateSchema = z.object({
-            rate: z.coerce.number(),
-        })
-    
-        const historyUpdateForm = useForm({
-            resolver: zodResolver(historyUpdateSchema),
-            defaultValues: {
-                rate: 0,
-            },
-        })
-    
-        useEffect(() => {
-            if (selectedHistory) {
-                historyUpdateForm.reset({rate: parseInt(selectedHistory.vendor[1])})
-            }
-        }, [selectedHistory])
-    
-       async function onSubmitHistoryUpdate(values: z.infer<typeof historyUpdateSchema>) {
-    try {
-        await postToSheet(
-            indentSheet
-                .filter((s) => s.indentNumber === selectedHistory?.indentNo)
-                .map((prev) => {
-                    const { timestamp, ...prevWithoutTimestamp } = prev;
-                    return {
-                        ...prevWithoutTimestamp,
-                        approvedRate: values.rate,
-                    };
-                }),
-            'update'
-        );
-        toast.success(`Updated rate of ${selectedHistory?.indentNo}`);
-        setOpenDialog(false);
-        historyUpdateForm.reset({ rate: undefined });
-        setTimeout(() => updateIndentSheet(), 1000);
-    } catch {
-        toast.error('Failed to update vendor');
+    const historyUpdateSchema = z.object({
+        rate: z.coerce.number(),
+    })
+
+    const historyUpdateForm = useForm({
+        resolver: zodResolver(historyUpdateSchema),
+        defaultValues: {
+            rate: 0,
+        },
+    })
+
+    useEffect(() => {
+        if (selectedHistory) {
+            historyUpdateForm.reset({ rate: parseInt(selectedHistory.vendor[1]) })
+        }
+    }, [selectedHistory])
+
+    async function onSubmitHistoryUpdate(values: z.infer<typeof historyUpdateSchema>) {
+        try {
+            await postToSheet(
+                indentSheet
+                    .filter((s) => s.indentNumber === selectedHistory?.indentNo)
+                    .map((prev) => {
+                        return {
+                            rowIndex: (prev as any).rowIndex,
+                            indentNumber: prev.indentNumber,
+                            approvedRate: values.rate,
+                        };
+                    }),
+                'update'
+            );
+            toast.success(`Updated rate of ${selectedHistory?.indentNo}`);
+            setOpenDialog(false);
+            historyUpdateForm.reset({ rate: undefined });
+            setTimeout(() => updateIndentSheet(), 1000);
+        } catch {
+            toast.error('Failed to update vendor');
+        }
     }
-}
 
     function onError(e: any) {
         console.log(e);
@@ -440,57 +440,57 @@ async function onSubmit(values: z.infer<typeof schema>) {
                     </DialogContent>
                 )}
 
-                                {selectedHistory && (
-                                        <DialogContent>
-                                            <Form {...historyUpdateForm}>
-                                                <form onSubmit={historyUpdateForm.handleSubmit(onSubmitHistoryUpdate, onError)} className="space-y-7">
-                                                    <DialogHeader className="space-y-1">
-                                                        <DialogTitle>Update Rate</DialogTitle>
-                                                        <DialogDescription>
-                                                            Update rate for{' '}
-                                                            <span className="font-medium">
-                                                                {selectedHistory.indentNo}
-                                                            </span>
-                                                        </DialogDescription>
-                                                    </DialogHeader>
-                                                    <div className="grid gap-3">
-                                                        <FormField
-                                                            control={historyUpdateForm.control}
-                                                            name="rate"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Rate</FormLabel>
-                                                                    <FormControl>
-                                                                        <Input type="number" {...field} />
-                                                                    </FormControl>
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                    </div>                                    
-                
-                                                    <DialogFooter>
-                                                        <DialogClose asChild>
-                                                            <Button variant="outline">Close</Button>
-                                                        </DialogClose>
-                
-                                                        <Button
-                                                            type="submit"
-                                                            disabled={historyUpdateForm.formState.isSubmitting}
-                                                        >
-                                                            {historyUpdateForm.formState.isSubmitting && (
-                                                                <Loader
-                                                                    size={20}
-                                                                    color="white"
-                                                                    aria-label="Loading Spinner"
-                                                                />
-                                                            )}
-                                                            Update
-                                                        </Button>
-                                                    </DialogFooter>
-                                                </form>
-                                            </Form>
-                                        </DialogContent>
-                                    )}
+                {selectedHistory && (
+                    <DialogContent>
+                        <Form {...historyUpdateForm}>
+                            <form onSubmit={historyUpdateForm.handleSubmit(onSubmitHistoryUpdate, onError)} className="space-y-7">
+                                <DialogHeader className="space-y-1">
+                                    <DialogTitle>Update Rate</DialogTitle>
+                                    <DialogDescription>
+                                        Update rate for{' '}
+                                        <span className="font-medium">
+                                            {selectedHistory.indentNo}
+                                        </span>
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-3">
+                                    <FormField
+                                        control={historyUpdateForm.control}
+                                        name="rate"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Rate</FormLabel>
+                                                <FormControl>
+                                                    <Input type="number" {...field} />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+
+                                <DialogFooter>
+                                    <DialogClose asChild>
+                                        <Button variant="outline">Close</Button>
+                                    </DialogClose>
+
+                                    <Button
+                                        type="submit"
+                                        disabled={historyUpdateForm.formState.isSubmitting}
+                                    >
+                                        {historyUpdateForm.formState.isSubmitting && (
+                                            <Loader
+                                                size={20}
+                                                color="white"
+                                                aria-label="Loading Spinner"
+                                            />
+                                        )}
+                                        Update
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </Form>
+                    </DialogContent>
+                )}
             </Dialog>
         </div>
     );

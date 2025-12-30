@@ -37,7 +37,7 @@ function generatePoNumber(poNumbers: string[], today = new Date()): string {
 
     // Step 2: Extract numbers for curre nt financial year
     const numbersInFY = poNumbers
-        .filter((po) => po.includes(`/${fy}/`))
+        .filter((po) => po && typeof po === 'string' && po.includes(`/${fy}/`))
         .map((po) => {
             const match = po.match(/\/(\d+)(?:-\d+)?$/); // gets '80' from '80-2'
             return match ? parseInt(match[1], 10) : null;
@@ -104,29 +104,29 @@ export default () => {
         }
     }, [details]);
 
-   const schema = z.object({
-  poNumber: z.string().nonempty(),
-  poDate: z.coerce.date(),
-  supplierName: z.string().nonempty(),
-  supplierAddress: z.string().nonempty(),
-  gstin: z.string().nonempty(),
-  quotationNumber: z.string().nonempty(),
-  quotationDate: z.coerce.date(),
-  ourEnqNo: z.string(),
-  enquiryDate: z.coerce.date(),
-  description: z.string().optional().default(''), // Made optional
-  indents: z
-    .array(
-      z.object({
-        indentNumber: z.string().nonempty(),
-        gst: z.coerce.number(),
-        discount: z.coerce.number().default(0).optional(),
-      })
-    ),
-  terms: z.array(z.string().nonempty()).max(10),
-  preparedBy: z.string().nonempty(),
-  approvedBy: z.string().nonempty(),
-});
+    const schema = z.object({
+        poNumber: z.string().nonempty(),
+        poDate: z.coerce.date(),
+        supplierName: z.string().nonempty(),
+        supplierAddress: z.string().nonempty(),
+        gstin: z.string().nonempty(),
+        quotationNumber: z.string().optional().default(''),
+        quotationDate: z.coerce.date().optional(),
+        ourEnqNo: z.string().optional().default(''),
+        enquiryDate: z.coerce.date().optional(),
+        description: z.string().optional().default(''), // Made optional
+        indents: z
+            .array(
+                z.object({
+                    indentNumber: z.string().nonempty(),
+                    gst: z.coerce.number(),
+                    discount: z.coerce.number().default(0).optional(),
+                })
+            ),
+        terms: z.array(z.string().nonempty()).max(10),
+        preparedBy: z.string().nonempty(),
+        approvedBy: z.string().nonempty(),
+    });
 
 
     type FormData = z.infer<typeof schema>;
@@ -244,41 +244,41 @@ export default () => {
         }
     }, [vendor]);
 
-   useEffect(() => {
-    const po = poMasterSheet.find((p) => p.poNumber === poNumber)!;
-    if (mode === 'revise' && po) {
-        const vendor = details?.vendors.find((v) => v.vendorName === po.partyName);
-        form.setValue('poDate', po.timestamp ? new Date(po.timestamp) : new Date());
-        form.setValue('supplierName', po.partyName);
-        form.setValue('supplierAddress', vendor?.address || '');
-        form.setValue('preparedBy', po.preparedBy);
-        form.setValue('approvedBy', po.approvedBy);
-        form.setValue('gstin', vendor?.gstin || '');
-        form.setValue('quotationNumber', po.quotationNumber);
-        form.setValue('quotationDate', po.quotationDate ? new Date(po.quotationDate) : new Date());
-        form.setValue('description', po.description);
-        form.setValue('ourEnqNo', po.enquiryNumber);
-        form.setValue('enquiryDate', po.enquiryDate ? new Date(po.enquiryDate) : new Date());
-        form.setValue(
-            'indents',
-            poMasterSheet
-                .filter((p) => p.poNumber === po.poNumber)
-                .map((po) => ({
-                    indentNumber: po.internalCode,
-                    gst: po.gst,
-                    discount: po.discount,
-                }))
-        );
-        const terms = [];
-        for (let i = 0; i < 10; i++) {
-            const term = po[`term${i + 1}` as keyof PoMasterSheet] as string;
-            if (term !== '') {
-                terms.push(term);
+    useEffect(() => {
+        const po = poMasterSheet.find((p) => p.poNumber === poNumber)!;
+        if (mode === 'revise' && po) {
+            const vendor = details?.vendors.find((v) => v.vendorName === po.partyName);
+            form.setValue('poDate', po.timestamp ? new Date(po.timestamp) : new Date());
+            form.setValue('supplierName', po.partyName);
+            form.setValue('supplierAddress', vendor?.address || '');
+            form.setValue('preparedBy', po.preparedBy);
+            form.setValue('approvedBy', po.approvedBy);
+            form.setValue('gstin', vendor?.gstin || '');
+            form.setValue('quotationNumber', po.quotationNumber);
+            form.setValue('quotationDate', po.quotationDate ? new Date(po.quotationDate) : new Date());
+            form.setValue('description', po.description);
+            form.setValue('ourEnqNo', po.enquiryNumber);
+            form.setValue('enquiryDate', po.enquiryDate ? new Date(po.enquiryDate) : new Date());
+            form.setValue(
+                'indents',
+                poMasterSheet
+                    .filter((p) => p.poNumber === po.poNumber)
+                    .map((po) => ({
+                        indentNumber: po.internalCode,
+                        gst: po.gst,
+                        discount: po.discount,
+                    }))
+            );
+            const terms = [];
+            for (let i = 0; i < 10; i++) {
+                const term = po[`term${i + 1}` as keyof PoMasterSheet] as string;
+                if (term !== '') {
+                    terms.push(term);
+                }
             }
+            form.setValue('terms', terms);
         }
-        form.setValue('terms', terms);
-    }
-}, [poNumber]);
+    }, [poNumber]);
 
     const handleDestinationEdit = () => {
         setIsEditingDestination(true);
@@ -294,99 +294,26 @@ export default () => {
         setIsEditingDestination(false);
     };
 
-   const getCurrentFormattedDateTime = () => {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = now.getFullYear();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-};
+    const getCurrentFormattedDateTime = () => {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    };
 
-async function onSubmit(values: FormData) {
-    try {
-        const poNumber =
-            mode === 'create'
-                ? values.poNumber
-                : incrementPoRevision(values.poNumber, poMasterSheet);
-        const grandTotal = calculateGrandTotal(
-            values.indents.map((indent) => {
-                const value = indentSheet.find((i) => i.indentNumber === indent.indentNumber);
-                return {
-                    quantity: value?.approvedQuantity || 0,
-                    rate: value?.approvedRate || 0,
-                    discountPercent: indent?.discount || 0,
-                    gstPercent: indent.gst,
-                };
-            })
-        );
-
-        // Convert logo image to base64 for PDF
-        const logoResponse = await fetch('/logo.png');
-        const logoBlob = await logoResponse.blob();
-        const logoBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(logoBlob);
-        });
-
-        const pdfProps: POPdfProps = {
-            // companyLogo: logoBase64,
-            companyName: details?.companyName || '',
-            companyPhone: details?.companyPhone || '',
-            companyGstin: details?.companyGstin || '',
-            companyPan: details?.companyPan || '',
-            companyAddress: details?.companyAddress || '',
-            billingAddress: details?.billingAddress || '',
-            destinationAddress: destinationAddress, // Use the editable destination address
-            supplierName: values.supplierName,
-            supplierAddress: values.supplierAddress,
-            supplierGstin: values.gstin,
-            orderNumber: poNumber,
-            orderDate: formatDate(values.poDate),
-            quotationNumber: values.quotationNumber,
-            quotationDate: formatDate(values.quotationDate),
-            enqNo: values.ourEnqNo,
-            enqDate: formatDate(values.enquiryDate),
-            description: values.description,
-            items: values.indents.map((item) => {
-                const indent = indentSheet.find((i) => i.indentNumber === item.indentNumber)!;
-                return {
-                    internalCode: indent.indentNumber,
-                    product: indent.productName,
-                    description: indent.specifications,
-                    quantity: indent.approvedQuantity,
-                    unit: indent.uom,
-                    rate: indent.approvedRate,
-                    gst: item.gst || 0,
-                    discount: item.discount || 0,
-                    amount: calculateTotal(
-                        indent.approvedRate,
-                        item.gst || 0,
-                        item.discount || 0,
-                        indent.approvedQuantity
-                    ),
-                };
-            }),
-            total: calculateSubtotal(
+    async function onSubmit(values: FormData) {
+        try {
+            const poNumber =
+                mode === 'create'
+                    ? values.poNumber
+                    : incrementPoRevision(values.poNumber, poMasterSheet);
+            const grandTotal = calculateGrandTotal(
                 values.indents.map((indent) => {
-                    const value = indentSheet.find(
-                        (i) => i.indentNumber === indent.indentNumber
-                    );
-                    return {
-                        quantity: value?.approvedQuantity || 0,
-                        rate: value?.approvedRate || 0,
-                        discountPercent: indent?.discount || 0,
-                    };
-                })
-            ),
-            gstAmount: calculateTotalGst(
-                values.indents.map((indent) => {
-                    const value = indentSheet.find(
-                        (i) => i.indentNumber === indent.indentNumber
-                    );
+                    const value = indentSheet.find((i) => i.indentNumber === indent.indentNumber);
                     return {
                         quantity: value?.approvedQuantity || 0,
                         rate: value?.approvedRate || 0,
@@ -394,96 +321,178 @@ async function onSubmit(values: FormData) {
                         gstPercent: indent.gst,
                     };
                 })
-            ),
-            grandTotal: grandTotal,
-            terms: values.terms,
-            preparedBy: values.preparedBy,
-            approvedBy: values.approvedBy,
-        };
+            );
 
-        const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
-        const file = new File([blob], `PO-${poNumber}.pdf`, {
-            type: 'application/pdf',
-        });
-      const email = details?.vendors.find((v) => v.vendorName === values.supplierName)?.email;
+            // Convert logo image to base64 for PDF
+            const logoResponse = await fetch('/logo.png');
+            const logoBlob = await logoResponse.blob();
+            const logoBase64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(logoBlob);
+            });
 
-let url = '';
-
-if (email) {
-    // Email hai to PDF upload + email send
-    url = await uploadFile(
-        file,
-        import.meta.env.VITE_PURCHASE_ORDERS_FOLDER,
-        'email',
-        email
-    );
-    toast.success('PO created and email sent successfully');
-} else {
-    // Email nahi hai to sirf PDF upload (without email)
-    url = await uploadFile(
-        file,
-        import.meta.env.VITE_PURCHASE_ORDERS_FOLDER,
-        'upload', // ← Use 'upload' instead of 'email'
-        '' // Empty email parameter
-    );
-    toast.warning("PO created but email not sent (vendor email not found)");
-}
-
-        const rows: PoMasterSheet[] = values.indents.map((v) => {
-            const indent = indentSheet.find((i) => i.indentNumber === v.indentNumber)!;
-            return {
-                timestamp: getCurrentFormattedDateTime(), // Updated format: DD/MM/YYYY HH:mm:ss
-                partyName: values.supplierName,
-                poNumber,
-                internalCode: v.indentNumber,
-                product: indent.productName,
+            const pdfProps: POPdfProps = {
+                // companyLogo: logoBase64,
+                companyName: details?.companyName || '',
+                companyPhone: details?.companyPhone || '',
+                companyGstin: details?.companyGstin || '',
+                companyPan: details?.companyPan || '',
+                companyAddress: details?.companyAddress || '',
+                billingAddress: details?.billingAddress || '',
+                destinationAddress: destinationAddress, // Use the editable destination address
+                supplierName: values.supplierName,
+                supplierAddress: values.supplierAddress,
+                supplierGstin: values.gstin,
+                orderNumber: poNumber,
+                orderDate: formatDate(values.poDate),
+                quotationNumber: values.quotationNumber,
+                quotationDate: values.quotationDate ? formatDate(values.quotationDate) : '',
+                enqNo: values.ourEnqNo,
+                enqDate: values.enquiryDate ? formatDate(values.enquiryDate) : '',
                 description: values.description,
-                quantity: indent.approvedQuantity,
-                unit: indent.uom,
-                rate: indent.approvedRate,
-                gst: v.gst,
-                discount: v.discount || 0,
-                amount: calculateTotal(
-                    indent.approvedRate,
-                    v.gst,
-                    v.discount || 0,
-                    indent.approvedQuantity
+                items: values.indents.map((item) => {
+                    const indent = indentSheet.find((i) => i.indentNumber === item.indentNumber)!;
+                    return {
+                        internalCode: indent.indentNumber,
+                        product: indent.productName,
+                        description: indent.specifications,
+                        quantity: indent.approvedQuantity,
+                        unit: indent.uom,
+                        rate: indent.approvedRate,
+                        gst: item.gst || 0,
+                        discount: item.discount || 0,
+                        amount: calculateTotal(
+                            indent.approvedRate,
+                            item.gst || 0,
+                            item.discount || 0,
+                            indent.approvedQuantity
+                        ),
+                    };
+                }),
+                total: calculateSubtotal(
+                    values.indents.map((indent) => {
+                        const value = indentSheet.find(
+                            (i) => i.indentNumber === indent.indentNumber
+                        );
+                        return {
+                            quantity: value?.approvedQuantity || 0,
+                            rate: value?.approvedRate || 0,
+                            discountPercent: indent?.discount || 0,
+                        };
+                    })
                 ),
-                totalPoAmount: grandTotal,
-                pdf: url,
+                gstAmount: calculateTotalGst(
+                    values.indents.map((indent) => {
+                        const value = indentSheet.find(
+                            (i) => i.indentNumber === indent.indentNumber
+                        );
+                        return {
+                            quantity: value?.approvedQuantity || 0,
+                            rate: value?.approvedRate || 0,
+                            discountPercent: indent?.discount || 0,
+                            gstPercent: indent.gst,
+                        };
+                    })
+                ),
+                grandTotal: grandTotal,
+                terms: values.terms,
                 preparedBy: values.preparedBy,
                 approvedBy: values.approvedBy,
-                quotationNumber: values.quotationNumber,
-                quotationDate: values.quotationDate ? formatDate(values.quotationDate) : '', // Use formatDate for consistency
-                enquiryNumber: values.ourEnqNo,
-                enquiryDate: values.enquiryDate ? formatDate(values.enquiryDate) : '', // Use formatDate for consistency
-                term1: values.terms[0],
-                term2: values.terms[1],
-                term3: values.terms[2],
-                term4: values.terms[3],
-                term5: values.terms[4],
-                term6: values.terms[5],
-                term7: values.terms[6],
-                term8: values.terms[7],
-                term9: values.terms[8],
-                term10: values.terms[9],
-                discountPercent: v.discount || 0, // Add this
-                gstPercent: v.gst, // Add this
             };
-        });
 
-        await postToSheet(rows, 'insert', 'PO MASTER');
-        toast.success(`Successfully ${mode}d purchase order`);
-        form.reset();
-        setTimeout(() => {
-            updatePoMasterSheet();
-            updateIndentSheet();
-        }, 1000);
-    } catch (e) {
-        console.log(e);
-        toast.error(`Failed to ${mode} purchase order`);
+            const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
+            const file = new File([blob], `PO-${poNumber}.pdf`, {
+                type: 'application/pdf',
+            });
+            const email = details?.vendors.find((v) => v.vendorName === values.supplierName)?.email;
+
+            let url = '';
+
+            try {
+                if (email) {
+                    // Email hai to PDF upload + email send
+                    url = await uploadFile(
+                        file,
+                        import.meta.env.VITE_PURCHASE_ORDERS_FOLDER,
+                        'email',
+                        email
+                    );
+                    toast.success('PO created and email sent successfully');
+                } else {
+                    // Email nahi hai to sirf PDF upload (without email)
+                    url = await uploadFile(
+                        file,
+                        import.meta.env.VITE_PURCHASE_ORDERS_FOLDER,
+                        'upload',
+                        '' // Empty email parameter
+                    );
+                    toast.warning("PO created but email not sent (vendor email not found)");
+                }
+            } catch (uploadError) {
+                console.error("Upload/Email error:", uploadError);
+                toast.error("Failed to upload/email PO, but saving data to sheet...");
+                // URL remains empty but we proceed to save the record
+            }
+
+            const rows: PoMasterSheet[] = values.indents.map((v) => {
+                const indent = indentSheet.find((i) => i.indentNumber === v.indentNumber)!;
+                return {
+                    timestamp: getCurrentFormattedDateTime(), // Updated format: DD/MM/YYYY HH:mm:ss
+                    partyName: values.supplierName,
+                    poNumber,
+                    internalCode: v.indentNumber,
+                    product: indent.productName,
+                    description: values.description,
+                    quantity: indent.approvedQuantity,
+                    unit: indent.uom,
+                    rate: indent.approvedRate,
+                    gst: v.gst,
+                    discount: v.discount || 0,
+                    amount: calculateTotal(
+                        indent.approvedRate,
+                        v.gst,
+                        v.discount || 0,
+                        indent.approvedQuantity
+                    ),
+                    totalPoAmount: grandTotal,
+                    pdf: url,
+                    preparedBy: values.preparedBy,
+                    approvedBy: values.approvedBy,
+                    quotationNumber: values.quotationNumber,
+                    quotationDate: values.quotationDate ? formatDate(values.quotationDate) : '', // Use formatDate for consistency
+                    enquiryNumber: values.ourEnqNo,
+                    enquiryDate: values.enquiryDate ? formatDate(values.enquiryDate) : '', // Use formatDate for consistency
+                    term1: values.terms[0],
+                    term2: values.terms[1],
+                    term3: values.terms[2],
+                    term4: values.terms[3],
+                    term5: values.terms[4],
+                    term6: values.terms[5],
+                    term7: values.terms[6],
+                    term8: values.terms[7],
+                    term9: values.terms[8],
+                    term10: values.terms[9],
+                    discountPercent: v.discount || 0, // Add this
+                    gstPercent: v.gst, // Add this
+                    planned: formatDate(new Date()),
+                    actual: '',
+                    status: '',
+                };
+            });
+
+            await postToSheet(rows, 'insert', 'PO MASTER');
+            toast.success(`Successfully ${mode}d purchase order`);
+            form.reset();
+            setTimeout(() => {
+                updatePoMasterSheet();
+                updateIndentSheet();
+            }, 1000);
+        } catch (e) {
+            console.log(e);
+            toast.error(`Failed to ${mode} purchase order`);
+        }
     }
-}
 
     function onError(e: any) {
         console.log(e);
@@ -964,31 +973,31 @@ if (email) {
                                                         <TableCell>
                                                             {indent?.approvedRate}
                                                         </TableCell>
-                                                       <TableCell>
-    <FormField
-        control={form.control}
-        name={`indents.${index}.gst`}
-        render={({ field: indentField }) => (
-            <FormItem>
-                <Select
-                    onValueChange={(value) => indentField.onChange(Number(value))}
-                    value={indentField.value?.toString()}
-                >
-                    <FormControl>
-                        <SelectTrigger className="h-9 w-20">
-                            <SelectValue placeholder="GST%" />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        <SelectItem value="18">18%</SelectItem>
-                        <SelectItem value="5">5%</SelectItem>
-                        <SelectItem value="0">0%</SelectItem>
-                    </SelectContent>
-                </Select>
-            </FormItem>
-        )}
-    />
-</TableCell>
+                                                        <TableCell>
+                                                            <FormField
+                                                                control={form.control}
+                                                                name={`indents.${index}.gst`}
+                                                                render={({ field: indentField }) => (
+                                                                    <FormItem>
+                                                                        <Select
+                                                                            onValueChange={(value) => indentField.onChange(Number(value))}
+                                                                            value={indentField.value?.toString()}
+                                                                        >
+                                                                            <FormControl>
+                                                                                <SelectTrigger className="h-9 w-20">
+                                                                                    <SelectValue placeholder="GST%" />
+                                                                                </SelectTrigger>
+                                                                            </FormControl>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="18">18%</SelectItem>
+                                                                                <SelectItem value="5">5%</SelectItem>
+                                                                                <SelectItem value="0">0%</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        </TableCell>
                                                         <TableCell>
                                                             <FormField
                                                                 control={form.control}

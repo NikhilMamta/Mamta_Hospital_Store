@@ -37,7 +37,7 @@ import {
     Store,
     Video,
     KeyRound,
-    
+
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
 import Administration from './components/views/Administration';
@@ -47,6 +47,7 @@ import PendingIndents from './components/views/PendingIndents';
 import Order from './components/views/Order';
 import Inventory from './components/views/Inventory';
 import POMaster from './components/views/POMaster';
+import POApproval from './components/views/POApproval';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { loggedIn, loading } = useAuth();
@@ -63,9 +64,9 @@ function GatedRoute({
 }) {
     const { user } = useAuth();
     if (!identifier) return children;
-    
+
     const permissionValue = (user as any)[identifier];
-    
+
     // Check permission
     if (typeof permissionValue === 'string') {
         if (permissionValue.toUpperCase() !== 'TRUE') {
@@ -82,22 +83,22 @@ function GatedRoute({
     } else {
         return <Navigate to="/" replace />;
     }
-    
+
     return children;
 }
 
 function DefaultRoute({ routes }: { routes: RouteAttributes[] }) {
     const { user } = useAuth();
-    
+
     if (!user) return <Navigate to="/login" />;
-    
+
     // Find first accessible route
     const firstAccessibleRoute = routes.find(route => {
         // Skip routes without gateKey (always accessible)
         if (!route.gateKey) return true;
-        
+
         const permissionValue = (user as any)[route.gateKey];
-        
+
         // Check if user has access
         if (typeof permissionValue === 'string') {
             return permissionValue.toUpperCase() === 'TRUE';
@@ -110,11 +111,11 @@ function DefaultRoute({ routes }: { routes: RouteAttributes[] }) {
         }
         return false;
     });
-    
+
     if (firstAccessibleRoute) {
         return <Navigate to={`/${firstAccessibleRoute.path}`} replace />;
     }
-    
+
     // If no accessible routes, logout or show error
     return <Navigate to="/login" replace />;
 }
@@ -145,8 +146,8 @@ const routes: RouteAttributes[] = [
         notifications: () => 0,
     },
 
-    
-     {
+
+    {
         path: 'all-indent',
         gateKey: 'allIndent',
         name: 'All Indent',
@@ -225,6 +226,14 @@ const routes: RouteAttributes[] = [
         notifications: () => 0,
     },
     {
+        path: 'po-approval',
+        gateKey: 'poMaster',
+        name: 'PO Approval',
+        icon: <PackageCheck size={20} />,
+        element: <POApproval />,
+        notifications: () => 0,
+    },
+    {
         path: 'get-purchase',
         gateKey: 'getPurchase',
         name: 'Get Purchase',
@@ -271,7 +280,7 @@ const routes: RouteAttributes[] = [
         element: <Administration />,
         notifications: () => 0,
     },
-    { 
+    {
         path: 'training-video',
         name: 'Training Video',
         icon: <Video size={20} />,
