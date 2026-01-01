@@ -15,6 +15,7 @@ import VendorUpdate from './components/views/VendorUpdate';
 import RateApproval from './components/views/RateApproval';
 import ReceiveItems from './components/views/ReceiveItems';
 import StoreOutApproval from './components/views/StoreOutApproval';
+import StoreOut from './components/views/StoreOut';
 import GetPurchase from './components/views/getPurchase';
 import TrainnigVideo from './components/views/TrainingVideo';
 import License from './components/views/License';
@@ -263,6 +264,14 @@ const routes: RouteAttributes[] = [
                     sheet.actual6 === '' &&
                     sheet.indentType === 'Store Out'
             ).length,
+    },
+    {
+        path: 'store-out',
+        gateKey: 'storeOutApprovalView',
+        name: 'Store Out',
+        icon: <PackageCheck size={20} />,
+        element: <StoreOut />,
+        notifications: () => 0,
     },
     {
         path: 'quotation',

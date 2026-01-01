@@ -25,7 +25,12 @@ export async function insertStoreOutDirect(rows: any[]) {
                 row.actual || '',           // M: Actual
                 Number(row.timeDelay) || 0, // N: Time Delay
                 row.status || '',           // O: Status
-                Number(row.approveQty) || 0 // P: Approve Qty
+                Number(row.approveQty) || 0, // P: Approve Qty
+                '',                         // Q: Index 16
+                '',                         // R: Index 17
+                '',                         // S: Index 18
+                row.category || '',         // T: Group of head (Index 19)
+                row.productName || ''       // U: Product Name (Index 20)
             ];
         });
 

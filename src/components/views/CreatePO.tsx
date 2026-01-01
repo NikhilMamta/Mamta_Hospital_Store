@@ -121,6 +121,7 @@ export default () => {
                     indentNumber: z.string().nonempty(),
                     gst: z.coerce.number(),
                     discount: z.coerce.number().default(0).optional(),
+                    searialNumber: z.union([z.string(), z.number()]).optional(),
                 })
             ),
         terms: z.array(z.string().nonempty()).max(10),
@@ -239,6 +240,7 @@ export default () => {
                     indentNumber: i.indentNumber,
                     gst: 18,
                     discount: 0,
+                    searialNumber: i.searialNumber,
                 }))
             );
         }
@@ -313,7 +315,14 @@ export default () => {
                     : incrementPoRevision(values.poNumber, poMasterSheet);
             const grandTotal = calculateGrandTotal(
                 values.indents.map((indent) => {
-                    const value = indentSheet.find((i) => i.indentNumber === indent.indentNumber);
+                    // Precise match using searialNumber if available
+                    const value = indentSheet.find((i) => {
+                        if (indent.searialNumber) {
+                            return String(i.searialNumber) === String(indent.searialNumber);
+                        }
+                        return i.indentNumber === indent.indentNumber;
+                    });
+
                     return {
                         quantity: value?.approvedQuantity || 0,
                         rate: value?.approvedRate || 0,
@@ -352,7 +361,14 @@ export default () => {
                 enqDate: values.enquiryDate ? formatDate(values.enquiryDate) : '',
                 description: values.description,
                 items: values.indents.map((item) => {
-                    const indent = indentSheet.find((i) => i.indentNumber === item.indentNumber)!;
+                    // Precise match using searialNumber
+                    const indent = indentSheet.find((i) => {
+                        if (item.searialNumber) {
+                            return String(i.searialNumber) === String(item.searialNumber);
+                        }
+                        return i.indentNumber === item.indentNumber;
+                    })!;
+
                     return {
                         internalCode: indent.indentNumber,
                         product: indent.productName,
@@ -436,7 +452,13 @@ export default () => {
             }
 
             const rows: PoMasterSheet[] = values.indents.map((v) => {
-                const indent = indentSheet.find((i) => i.indentNumber === v.indentNumber)!;
+                const indent = indentSheet.find((i) => {
+                    if (v.searialNumber) {
+                        return String(i.searialNumber) === String(v.searialNumber);
+                    }
+                    return i.indentNumber === v.indentNumber;
+                })!;
+
                 return {
                     timestamp: getCurrentFormattedDateTime(), // Updated format: DD/MM/YYYY HH:mm:ss
                     partyName: values.supplierName,
@@ -533,7 +555,7 @@ export default () => {
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
                             <div className="flex items-center justify-center gap-4 bg-blue-50 p-4 rounded">
                                 <img
-                                    src="/logo.png"
+                                    src="/00.  Logo HD (1).png"
                                     alt="Company Logo"
                                     className="w-20 h-20 object-contain"
                                 />
@@ -933,6 +955,7 @@ export default () => {
                                     <Table>
                                         <TableHeader className="bg-muted">
                                             <TableRow>
+                                                <TableHead>S.No.</TableHead>
                                                 <TableHead>S/N</TableHead>
                                                 <TableHead>Internal Code</TableHead>
                                                 <TableHead>Product</TableHead>
@@ -950,10 +973,18 @@ export default () => {
                                             {itemsArray.fields.map((field, index) => {
                                                 const value = indents[index];
                                                 const indent = indentSheet.find(
-                                                    (i) => i.indentNumber === value.indentNumber
+                                                    (i) => {
+                                                        if (value.searialNumber) {
+                                                            return String(i.searialNumber) === String(value.searialNumber);
+                                                        }
+                                                        return i.indentNumber === value.indentNumber;
+                                                    }
                                                 );
                                                 return (
                                                     <TableRow key={field.id}>
+                                                        {/* Actual Serial Number from Sheet */}
+                                                        <TableCell>{indent?.searialNumber || '-'}</TableCell>
+                                                        {/* Index */}
                                                         <TableCell>{index + 1}</TableCell>
                                                         <TableCell>
                                                             {indent?.indentNumber}

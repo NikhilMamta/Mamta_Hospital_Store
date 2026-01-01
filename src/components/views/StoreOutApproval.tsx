@@ -43,6 +43,7 @@ interface StoreOutTableData {
     requestedBy: string;
     department: string;
     product: string;
+    groupHead: string;
     qty: number;
     unit: string;
     status: string;
@@ -51,10 +52,8 @@ interface StoreOutTableData {
     approveQty: number;
     indenterName: string;
     indentType: string;
-    floor: string;
     wardName: string;
-    category: string;
-    areaOfUse: string;
+    searialNumber?: string | number;
     // Helper for update
     originalRow: any;
 }
@@ -100,26 +99,33 @@ export default () => {
         setHistoryData(history);
     }, [storeOutSheet]);
 
-    const mapRowToTableData = (row: any): StoreOutTableData => ({
-        issueNo: row.issueNo || row['Issue No'],
-        issueDate: formatDate(new Date(row.issueDate || row['Issue Date'])),
-        requestedBy: row.requestedBy || row['Requested By'],
-        department: row.department || row['Department'],
-        product: row.productName || row['Product Name'],
-        qty: Number(row.qty || row['Qty'] || row.quantity || 0),
-        unit: row.unit || row['Unit'],
-        status: row.status || '',
-        planned: row.planned || '',
-        actual: row.actual || '',
-        approveQty: Number(row.approveQty || 0),
-        indenterName: row.indenterName || row['Indenter Name'] || '',
-        indentType: row.indentType || row['Indent Type'] || '',
-        floor: row.floor || row['Floor'] || '',
-        wardName: row.wardName || row['Ward Name'] || '',
-        category: row.category || row['Category'] || '',
-        areaOfUse: row.areaOfUse || row['Area Of Use'] || '',
-        originalRow: row
-    });
+    const mapRowToTableData = (row: any): StoreOutTableData => {
+        // Debug logging for row keys
+        if (row.issueNo === 'IS-001') { // Log only for the first item to avoid spam
+            console.log("Row Keys for IS-001:", Object.keys(row));
+            console.log("Row Data for IS-001:", row);
+        }
+        return {
+            issueNo: row.issueNo || row['Issue No'],
+            issueDate: formatDate(new Date(row.issueDate || row['Issue Date'])),
+            requestedBy: row.requestedBy || row['Requested By'],
+            department: row.department || row['Department'],
+            product: row.productName || row['Product Name'] || row['Product'] || '',
+            groupHead: row.groupOfHead || row['Group of head'] || row.groupHead || row['Group Head'] || '',
+            qty: Number(row.qty || row['Qty'] || row.quantity || 0),
+            unit: row.unit || row['Unit'],
+            status: row.status || '',
+            planned: row.planned || '',
+            actual: row.actual || '',
+            approveQty: Number(row.approveQty || 0),
+            indenterName: row.indenterName || row['Indenter Name'] || '',
+            indentType: row.indentType || row['Indent Type'] || '',
+            wardName: row.wardName || row['Ward Name'] || '',
+            searialNumber: row.searialNumber,
+            originalRow: row
+        };
+
+    };
 
     const onDownloadClick = async () => {
         setLoading(true);
@@ -163,6 +169,11 @@ export default () => {
             )
         },
         {
+            accessorKey: 'searialNumber',
+            header: 'S.No.',
+            cell: ({ getValue }) => String(getValue() || '-'),
+        },
+        {
             accessorKey: 'issueNo',
             header: 'Issue No.',
             cell: ({ row }) => (
@@ -173,27 +184,30 @@ export default () => {
         },
         { accessorKey: 'issueDate', header: 'Date' },
         { accessorKey: 'requestedBy', header: 'Requested By' },
-        { accessorKey: 'floor', header: 'Floor' },
         { accessorKey: 'wardName', header: 'Ward Name' },
+        { accessorKey: 'groupHead', header: 'Group Head' },
+        { accessorKey: 'product', header: 'Product' },
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'unit', header: 'Unit' },
         { accessorKey: 'department', header: 'Department' },
-        { accessorKey: 'category', header: 'Category' },
-        { accessorKey: 'areaOfUse', header: 'Area Of Use' },
     ];
 
     const historyColumns: ColumnDef<StoreOutTableData>[] = [
+        {
+            accessorKey: 'searialNumber',
+            header: 'S.No.',
+            cell: ({ getValue }) => String(getValue() || '-'),
+        },
         { accessorKey: 'issueNo', header: 'Issue No.' },
         { accessorKey: 'issueDate', header: 'Request Date' },
         { accessorKey: 'actual', header: 'Approval Date', cell: ({ row }) => row.original.actual ? formatDate(new Date(row.original.actual)) : '-' },
         { accessorKey: 'requestedBy', header: 'Requested By' },
-        { accessorKey: 'floor', header: 'Floor' },
         { accessorKey: 'wardName', header: 'Ward Name' },
+        { accessorKey: 'groupHead', header: 'Group Head' },
+        { accessorKey: 'product', header: 'Product' },
         { accessorKey: 'qty', header: 'Req Qty' },
         { accessorKey: 'unit', header: 'Unit' },
         { accessorKey: 'department', header: 'Department' },
-        { accessorKey: 'category', header: 'Category' },
-        { accessorKey: 'areaOfUse', header: 'Area Of Use' },
         { accessorKey: 'approveQty', header: 'Approve Qty' },
         {
             accessorKey: 'status',
@@ -247,12 +261,18 @@ export default () => {
 
         try {
             await postToSheet(
-                [{
-                    ...restOfRow,
-                    actual: formattedDate,           // Column M
-                    status: values.status,           // Column R
-                    approveQty: values.approveQty,   // Column S
-                }],
+                storeOutSheet
+                    .filter((s) => selectedItem.searialNumber ? String(s.searialNumber) === String(selectedItem.searialNumber) : s.issueNo === selectedItem?.issueNo)
+                    .map((prev) => {
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                        const { searialNumber, planned, ...rest } = prev;
+                        return {
+                            ...rest,
+                            actual: formattedDate,           // Column M
+                            status: values.status,           // Column R
+                            approveQty: values.approveQty,   // Column S
+                        };
+                    }),
                 'update',
                 'STORE OUT'
             );
@@ -343,9 +363,15 @@ export default () => {
                             </div>
                         </div>
 
-                        <div className="col-span-2 border-b pb-4">
-                            <span className="font-semibold block text-xs text-muted-foreground">Qty</span>
-                            <span className="text-lg font-bold text-primary">{selectedItem.qty}</span>
+                        <div className="col-span-2 border-b pb-4 grid grid-cols-2">
+                            <div>
+                                <span className="font-semibold block text-xs text-muted-foreground">Qty</span>
+                                <span className="text-lg font-bold text-primary">{selectedItem.qty}</span>
+                            </div>
+                            <div>
+                                <span className="font-semibold block text-xs text-muted-foreground">S.No.</span>
+                                <span className="text-lg font-bold">{selectedItem.searialNumber || '-'}</span>
+                            </div>
                         </div>
                     </div>
 

@@ -38,6 +38,7 @@ interface VendorUpdateData {
     uom: string;
     vendorType: 'Three Party' | 'Regular';
     vendorName?: string;
+    searialNumber?: string | number;
 }
 interface HistoryData {
     indentNo: string;
@@ -51,6 +52,7 @@ interface HistoryData {
     date: string;
     lastUpdated?: string;
     vendorName?: string;
+    searialNumber?: string | number;
 }
 
 export default () => {
@@ -90,6 +92,7 @@ export default () => {
                     uom: sheet.uom,
                     vendorType: sheet.vendorType as VendorUpdateData['vendorType'],
                     vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
+                    searialNumber: sheet.searialNumber,
                 }))
                 .reverse()
         );
@@ -107,6 +110,7 @@ export default () => {
                     rate: sheet.approvedRate || 0,
                     vendorType: sheet.vendorType as HistoryData['vendorType'],
                     vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
+                    searialNumber: sheet.searialNumber,
                 }))
                 .reverse()
         );
@@ -114,7 +118,7 @@ export default () => {
 
 
     const handleEditClick = (row: HistoryData) => {
-        setEditingRow(row.indentNo);
+        setEditingRow(row.searialNumber || row.indentNo);
         setEditValues({
             quantity: row.quantity,
             uom: row.uom,
@@ -131,11 +135,11 @@ export default () => {
         setEditValues({});
     };
 
-    const handleSaveEdit = async (indentNo: string) => {
+    const handleSaveEdit = async (identifier: string) => {
         try {
             await postToSheet(
                 indentSheet
-                    .filter((s) => s.indentNumber === indentNo)
+                    .filter((s) => String(s.searialNumber) === identifier || s.indentNumber === identifier)
                     .map((prev) => {
                         return {
                             rowIndex: (prev as any).rowIndex,
@@ -152,7 +156,7 @@ export default () => {
                     }),
                 'update'
             );
-            toast.success(`Updated indent ${indentNo}`);
+            toast.success(`Updated indent ${identifier}`);
             updateIndentSheet();
             setEditingRow(null);
             setEditValues({});
@@ -193,6 +197,15 @@ export default () => {
                 },
             ]
             : []),
+        {
+            accessorKey: 'searialNumber',
+            header: 'S.No.',
+            cell: ({ getValue }) => (
+                <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    {String(getValue() || '-')}
+                </div>
+            ),
+        },
         {
             accessorKey: 'indentNo',
             header: 'Indent No.',
@@ -263,6 +276,15 @@ export default () => {
             header: 'Date',
         },
         {
+            accessorKey: 'searialNumber',
+            header: 'S.No.',
+            cell: ({ getValue }) => (
+                <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    {String(getValue() || '-')}
+                </div>
+            ),
+        },
+        {
             accessorKey: 'indentNo',
             header: 'Indent No.',
         },
@@ -278,7 +300,7 @@ export default () => {
             accessorKey: 'product',
             header: 'Product',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
                 return isEditing ? (
                     <Input
                         value={editValues.product ?? row.original.product}
@@ -307,7 +329,7 @@ export default () => {
             accessorKey: 'quantity',
             header: 'Quantity',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
                 return isEditing ? (
                     <Input
                         type="number"
@@ -336,7 +358,7 @@ export default () => {
             accessorKey: "rate",
             header: "Rate",
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
                 const rate = row.original.rate;
                 const vendorType = row.original.vendorType;
 
@@ -375,7 +397,7 @@ export default () => {
             accessorKey: 'uom',
             header: 'UOM',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
                 return isEditing ? (
                     <Input
                         value={editValues.uom ?? row.original.uom}
@@ -403,7 +425,7 @@ export default () => {
             accessorKey: 'vendorName',
             header: 'Vendor Name',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
                 return isEditing ? (
                     <Input
                         value={editValues.vendorName ?? row.original.vendorName}
@@ -432,7 +454,7 @@ export default () => {
             accessorKey: 'vendorType',
             header: 'Vendor Type',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
                 return isEditing ? (
                     <Select
                         value={editValues.vendorType ?? row.original.vendorType}
@@ -472,7 +494,7 @@ export default () => {
                 {
                     id: 'editActions',
                     cell: ({ row }: { row: Row<HistoryData> }) => {
-                        const isEditing = editingRow === row.original.indentNo;
+                        const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
                         return isEditing ? (
                             <div className="flex gap-2">
                                 <Button
@@ -537,7 +559,7 @@ export default () => {
         try {
             await postToSheet(
                 indentSheet
-                    .filter((s) => s.indentNumber === selectedIndent?.indentNo)
+                    .filter((s) => selectedIndent?.searialNumber ? String(s.searialNumber) === String(selectedIndent.searialNumber) : s.indentNumber === selectedIndent?.indentNo)
                     .map((prev) => {
                         return {
                             rowIndex: (prev as any).rowIndex,
@@ -568,9 +590,9 @@ export default () => {
         comparisonSheet: z.instanceof(File).optional(),
         vendors: z.array(
             z.object({
-                vendorName: z.string().nonempty(),
-                rate: z.coerce.number().gt(0),
-                paymentTerm: z.string().nonempty(),
+                vendorName: z.string().optional().or(z.literal('')),
+                rate: z.coerce.number().optional(),
+                paymentTerm: z.string().optional().or(z.literal('')),
             })
         ).max(10).min(1),
     });
@@ -580,7 +602,7 @@ export default () => {
         defaultValues: {
             vendors: Array.from({ length: 10 }, () => ({
                 vendorName: '',
-                rate: 0,
+                rate: undefined,
                 paymentTerm: '',
             })),
         },
@@ -603,7 +625,7 @@ export default () => {
 
             await postToSheet(
                 indentSheet
-                    .filter((s) => s.indentNumber === selectedIndent?.indentNo)
+                    .filter((s) => selectedIndent?.searialNumber ? String(s.searialNumber) === String(selectedIndent.searialNumber) : s.indentNumber === selectedIndent?.indentNo)
                     .map((prev) => {
                         return {
                             rowIndex: (prev as any).rowIndex,
@@ -677,7 +699,7 @@ export default () => {
         try {
             await postToSheet(
                 indentSheet
-                    .filter((s) => s.indentNumber === selectedHistory?.indentNo)
+                    .filter((s) => selectedHistory?.searialNumber ? String(s.searialNumber) === String(selectedHistory.searialNumber) : s.indentNumber === selectedHistory?.indentNo)
                     .map((prev) => {
                         return {
                             rowIndex: (prev as any).rowIndex,
@@ -769,6 +791,12 @@ export default () => {
                                             <p className="font-medium">Product</p>
                                             <p className="text-sm font-light">
                                                 {selectedIndent.product}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">S.No.</p>
+                                            <p className="text-sm font-light">
+                                                {selectedIndent.searialNumber || '-'}
                                             </p>
                                         </div>
                                     </div>
@@ -942,23 +970,29 @@ export default () => {
                                             </span>
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <div className="grid grid-cols-3 bg-muted p-2 rounded-md ">
+                                    <div className="grid grid-cols-2 bg-muted p-2 rounded-md gap-2">
                                         <div className="space-y-1">
-                                            <p className="font-medium">Indenter</p>
-                                            <p className="text-sm font-light">
+                                            <p className="font-medium text-sm">Indenter</p>
+                                            <p className="text-xs font-light">
                                                 {selectedIndent.indenter}
                                             </p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="font-medium">Department</p>
-                                            <p className="text-sm font-light">
+                                            <p className="font-medium text-sm">Department</p>
+                                            <p className="text-xs font-light">
                                                 {selectedIndent.department}
                                             </p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="font-medium">Product</p>
-                                            <p className="text-sm font-light">
+                                            <p className="font-medium text-sm">Product</p>
+                                            <p className="text-xs font-light line-clamp-2">
                                                 {selectedIndent.product}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium text-sm">S.No.</p>
+                                            <p className="text-xs font-light">
+                                                {selectedIndent.searialNumber || '-'}
                                             </p>
                                         </div>
                                     </div>
@@ -1158,6 +1192,16 @@ export default () => {
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="grid gap-3">
+                                        <div className="bg-muted p-2 rounded-md grid grid-cols-2 gap-2 text-xs">
+                                            <div className="space-y-1">
+                                                <p className="font-medium text-muted-foreground">Product</p>
+                                                <p className="font-light truncate">{selectedHistory.product}</p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="font-medium text-muted-foreground">S.No.</p>
+                                                <p className="font-light">{selectedHistory.searialNumber || '-'}</p>
+                                            </div>
+                                        </div>
                                         <FormField
                                             control={historyUpdateForm.control}
                                             name="rate"

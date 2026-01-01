@@ -36,6 +36,7 @@ interface RateApprovalData {
     comparisonSheet: string;
     vendors: [string, string, string][];
     date: string;
+    searialNumber?: string | number;
 }
 interface HistoryData {
     indentNo: string;
@@ -44,6 +45,7 @@ interface HistoryData {
     product: string;
     vendor: [string, string];
     date: string;
+    searialNumber?: string | number;
 }
 
 export default () => {
@@ -73,6 +75,7 @@ export default () => {
                     product: sheet.productName,
                     comparisonSheet: sheet.comparisonSheet || '',
                     date: formatDate(new Date(sheet.timestamp)),
+                    searialNumber: sheet.searialNumber,
                     vendors: [
                         [sheet.vendorName1, sheet.rate1.toString(), sheet.paymentTerm1],
                         [sheet.vendorName2, sheet.rate2.toString(), sheet.paymentTerm2],
@@ -95,6 +98,7 @@ export default () => {
                     department: sheet.department,
                     product: sheet.productName,
                     date: new Date(sheet.timestamp).toDateString(),
+                    searialNumber: sheet.searialNumber,
                     vendor: [sheet.approvedVendorName, sheet.approvedRate.toString()],
                 }))
 
@@ -129,6 +133,11 @@ export default () => {
                 },
             ]
             : []),
+        {
+            accessorKey: 'searialNumber',
+            header: 'S.No.',
+            cell: ({ getValue }) => String(getValue() || '-'),
+        },
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'indenter', header: 'Indenter' },
         { accessorKey: 'department', header: 'Department' },
@@ -192,6 +201,11 @@ export default () => {
                 },
             },
         ] : []),
+        {
+            accessorKey: 'searialNumber',
+            header: 'S.No.',
+            cell: ({ getValue }) => String(getValue() || '-'),
+        },
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'indenter', header: 'Indenter' },
         { accessorKey: 'department', header: 'Department' },
@@ -241,7 +255,7 @@ export default () => {
         try {
             await postToSheet(
                 indentSheet
-                    .filter((s) => s.indentNumber === selectedIndent?.indentNo)
+                    .filter((s) => selectedIndent?.searialNumber ? String(s.searialNumber) === String(selectedIndent.searialNumber) : s.indentNumber === selectedIndent?.indentNo)
                     .map((prev) => {
                         return {
                             rowIndex: (prev as any).rowIndex,
@@ -284,7 +298,7 @@ export default () => {
         try {
             await postToSheet(
                 indentSheet
-                    .filter((s) => s.indentNumber === selectedHistory?.indentNo)
+                    .filter((s) => selectedHistory?.searialNumber ? String(s.searialNumber) === String(selectedHistory.searialNumber) : s.indentNumber === selectedHistory?.indentNo)
                     .map((prev) => {
                         return {
                             rowIndex: (prev as any).rowIndex,
@@ -353,7 +367,7 @@ export default () => {
                                         </span>
                                     </DialogDescription>
                                 </DialogHeader>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 bg-muted py-2 px-5 rounded-md ">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-muted py-2 px-5 rounded-md ">
                                     <div className="space-y-1">
                                         <p className="font-medium">Indenter</p>
                                         <p className="text-sm font-light">
@@ -370,6 +384,12 @@ export default () => {
                                         <p className="font-medium">Product</p>
                                         <p className="text-sm font-light">
                                             {selectedIndent.product}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="font-medium">S.No.</p>
+                                        <p className="text-sm font-light">
+                                            {selectedIndent.searialNumber || '-'}
                                         </p>
                                     </div>
                                 </div>
@@ -453,6 +473,16 @@ export default () => {
                                         </span>
                                     </DialogDescription>
                                 </DialogHeader>
+                                <div className="bg-muted p-2 rounded-md grid grid-cols-2 gap-2 text-xs mb-3">
+                                    <div className="space-y-1">
+                                        <p className="font-medium text-muted-foreground">Product</p>
+                                        <p className="font-light truncate text-wrap">{selectedHistory.product}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="font-medium text-muted-foreground">S.No.</p>
+                                        <p className="font-light">{selectedHistory.searialNumber || '-'}</p>
+                                    </div>
+                                </div>
                                 <div className="grid gap-3">
                                     <FormField
                                         control={historyUpdateForm.control}

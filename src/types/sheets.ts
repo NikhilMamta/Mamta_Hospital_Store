@@ -69,6 +69,7 @@ export type IndentSheet = {
     advanceAmountIfAny: number;
     photoOfBill: string;
     rate: number;
+    searialNumber?: number | string;
 };
 
 export type StoreOutSheet = {
@@ -95,6 +96,15 @@ export type StoreOutSheet = {
     timeDelay: number;
     status: string;
     approveQty: number;
+    searialNumber?: number | string;
+    Planned1: string; // Column X
+    Actual1: string;  // Column Y
+    Status: string;   // Column AA
+    status1?: string; // Potential Fetcher rename for Column AA
+    storeOutStatus?: string; // Optional manual mapping
+    groupOfHead?: string; // Actual key from fetcher
+    slip?: string; // Column W
+    // Keeping internal mapped names if needed, but safer to match fetcher keys directly
 };
 
 export type ReceivedSheet = {
@@ -195,6 +205,8 @@ export type MasterSheet = {
     companyPan: string;
     destinationAddress: string;
     defaultTerms: string[];
+    units: string[];
+    wardNames: string[];
 };
 
 export type UserPermissions = {

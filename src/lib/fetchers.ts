@@ -1,5 +1,6 @@
 import type { IndentSheet, MasterSheet, ReceivedSheet, Sheet } from '@/types';
 import type { InventorySheet, PoMasterSheet, QuotationHistorySheet, StoreOutSheet, UserPermissions, Vendor } from '@/types/sheets';
+const STORE_HEAD_URL = "https://script.google.com/macros/s/AKfycbz-wbRJYrSa2Fis-nYI0tivRS2Ns6rcXkGc18Wsib6P5Psea0ai8kJ_zPOSHP-oRU6J/exec";
 
 export async function uploadFile(file: File, folderId: string, uploadType: 'upload' | 'email' = 'upload', email?: string): Promise<string> {
     const base64: string = await new Promise((resolve, reject) => {
@@ -61,6 +62,10 @@ export async function fetchSheet(
         const departments = new Set<string>();
         const paymentTerms = new Set<string>();
         const defaultTerms = new Set<string>();
+        const units = new Set<string>();
+        const wardNames = new Set<string>();
+
+        // ONLY fetch Ward Names from Column R of MASTER sheet
 
         for (let i = 0; i < length; i++) {
             const vendorName = data.vendorName?.[i];
@@ -73,7 +78,14 @@ export async function fetchSheet(
 
             if (data.department?.[i]) departments.add(data.department[i]);
             if (data.paymentTerm?.[i]) paymentTerms.add(data.paymentTerm[i]);
-            if (data.defaultTerms?.[i]) defaultTerms.add(data.defaultTerms[i])
+            if (data.defaultTerms?.[i]) defaultTerms.add(data.defaultTerms[i]);
+            if (data.unit?.[i]) units.add(data.unit[i]);
+            if (data.Unit?.[i]) units.add(data.Unit[i]);
+
+            // Strictly fetch Ward Names from Column R ONLY (no other columns)
+            if (data.wardName?.[i]) wardNames.add(data.wardName[i]);
+            if (data.wardnames?.[i]) wardNames.add(data.wardnames[i]);
+            if (data['Ward Name']?.[i]) wardNames.add(data['Ward Name'][i]);
 
             const group = data.groupHead?.[i];
             const item = data.itemName?.[i];
@@ -95,7 +107,9 @@ export async function fetchSheet(
             companyGstin: data.companyGstin,
             billingAddress: data.billingAddress,
             destinationAddress: data.destinationAddress,
-            defaultTerms: [...defaultTerms]
+            defaultTerms: [...defaultTerms],
+            units: [...units],
+            wardNames: [...wardNames]
         };
     }
     return raw.rows.filter((r: IndentSheet) => r.timestamp !== '');
@@ -211,24 +225,27 @@ export async function postToSheet(
 
     return res;
 }
-// Add this new function in fetchers.ts
-export async function postToMasterSheet(data: any[]) {
+// Submit ward name to MASTER sheet Column R using image tag approach
+export async function submitToMaster(wardName: string) {
     try {
-        const response = await fetch('/api/master-sheet', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
+        console.log(`[submitToMaster] Attempting to submit ward name: "${wardName}"`);
+
+        // Use the same MASTER_SHEET_URL as submitProductToMasterSheet
+        const MASTER_SHEET_URL = 'https://script.google.com/a/macros/jjspl.in/s/AKfycbyybfRgC2y9wLktUTQ9fTqp-qGMleFrj1c3pQJbLEQiMWr9-hNEaZyoqkWpeV9HF9Az/exec';
+
+        const params = new URLSearchParams({
+            sheetName: 'MASTER',
+            wardName: wardName
         });
 
-        if (!response.ok) {
-            throw new Error('Failed to post to master sheet');
-        }
+        // Use image tag trick to avoid CORS issues
+        const img = new Image();
+        img.src = `${MASTER_SHEET_URL}?${params.toString()}`;
 
-        return await response.json();
+        console.log(`[submitToMaster] Submitted "${wardName}" to MASTER Column R via image tag`);
+        return Promise.resolve(true);
     } catch (error) {
-        console.error('Error posting to master sheet:', error);
-        throw new Error('Something went wrong in the API');
+        console.error('[submitToMaster] Error submitting ward name to MASTER:', error);
+        return Promise.resolve(false);
     }
 }

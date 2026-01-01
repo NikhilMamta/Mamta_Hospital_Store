@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { ClipLoader as Loader } from 'react-spinners';
 import { ClipboardList, Trash, Search, Plus } from 'lucide-react'; // Plus ko import karo
-import { postToSheet, uploadFile } from '@/lib/fetchers';
+import { postToSheet, submitToMaster, uploadFile } from '@/lib/fetchers';
 import type { IndentSheet, StoreOutSheet } from '@/types';
 import { useSheets } from '@/context/SheetsContext';
 import Heading from '../element/Heading';
@@ -51,31 +51,44 @@ export default () => {
         products: z
             .array(
                 z.object({
-                    department: z.string().nonempty(),
+                    department: z.string().optional(),
                     groupHead: z.string().optional(),
                     productName: z.string().optional(),
                     quantity: z.coerce.number().gt(0, 'Must be greater than 0'),
-                    uom: z.string().nonempty(),
-                    areaOfUse: z.string().nonempty(),
+                    uom: z.string().optional(),
+                    areaOfUse: z.string().optional(),
+                    wardName: z.string().optional(),
                     attachment: z.instanceof(File).optional(),
                     specifications: z.string().optional(),
                     // New fields for Store Out
                     floor: z.string().optional(),
-                    wardName: z.string().optional(),
                     category: z.string().optional(),
                     issueDate: z.string().optional(),
                     requestedBy: z.string().optional(),
                 })
             )
             .min(1, 'At least one product is required'),
-    }).refine((data) => {
+    }).superRefine((data, ctx) => {
         if (data.indentType === 'Purchase') {
-            return !!data.indenterName && !!data.indentApproveBy;
+            if (!data.indenterName) ctx.addIssue({ code: 'custom', message: 'Required', path: ['indenterName'] });
+            if (!data.indentApproveBy) ctx.addIssue({ code: 'custom', message: 'Required', path: ['indentApproveBy'] });
+
+            data.products.forEach((p, i) => {
+                if (!p.department) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'department'] });
+                if (!p.groupHead) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'groupHead'] });
+                if (!p.productName) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'productName'] });
+                if (!p.uom) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'uom'] });
+                if (!p.areaOfUse) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'areaOfUse'] });
+            });
+        } else if (data.indentType === 'Store Out') {
+            data.products.forEach((p, i) => {
+                if (!p.department) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'department'] });
+                if (!p.wardName) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'wardName'] });
+                if (!p.category) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'category'] });
+                if (!p.productName) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'productName'] });
+                if (!p.uom) ctx.addIssue({ code: 'custom', message: 'Required', path: ['products', i, 'uom'] });
+            });
         }
-        return true;
-    }, {
-        message: "Required for Purchase",
-        path: ["indenterName"] // Shows on indenterName, but logic applies to both
     });
 
 
@@ -96,11 +109,9 @@ export default () => {
                     groupHead: '',
                     department: '',
                     // Initialize Store Out specific fields to avoid uncontrolled warnings
-                    floor: '',
                     wardName: '',
                     category: '',
-                    requestedBy: '',
-                    issueDate: undefined,
+                    issueDate: new Date().toISOString().split('T')[0],
                 },
             ],
         },
@@ -113,6 +124,14 @@ export default () => {
         control: form.control,
         name: 'products',
     });
+
+    useEffect(() => {
+        if (indentType === 'Purchase' && !form.getValues('indentApproveBy')) {
+            form.setValue('indentApproveBy', 'Dr Sunil Ramnani');
+        } else if (indentType === 'Store Out' && !form.getValues('indentApproveBy')) {
+            form.setValue('indentApproveBy', 'Store Incharge');
+        }
+    }, [indentType, form]);
 
 
     // Function to generate next indent number
@@ -225,10 +244,6 @@ export default () => {
 
                 for (let i = 0; i < data.products.length; i++) {
                     const product = data.products[i];
-                    if (i > 0) {
-                        const lastNumber = parseInt(currentIssueNumber.replace('IS-', ''), 10);
-                        currentIssueNumber = `IS-${String(lastNumber + 1).padStart(3, '0')}`;
-                    }
 
                     // const storeOutRow: Partial<StoreOutSheet> = {
                     //     timestamp: timestamp,
@@ -271,13 +286,15 @@ export default () => {
                         indenterName: data.indenterName || '',
                         indentType: data.indentType || 'Store Out',
                         approvalNeeded: data.indentApproveBy || '',
-                        requestedBy: product.requestedBy || data.indenterName || '',
-                        floor: product.floor || '',
+                        requestedBy: data.indenterName || '', // Default to indenterName
+                        floor: '',
                         wardName: product.wardName || '',
                         qty: Number(product.quantity) || 0,
                         unit: product.uom || '',
                         department: product.department || '',
                         category: product.category || '',
+                        groupHead: product.category || '', // Guess for Column T
+                        groupOfHead: product.category || '', // Another guess for Column T
                         areaOfUse: product.areaOfUse || '',
                         productName: product.productName || '',
                         planned: '',  // Empty for now, will be filled during approval
@@ -299,6 +316,15 @@ export default () => {
 
                 if (res.success) {
                     toast.success(`Store Out created! Issue No: ${storeOutRows.map(r => r.issueNo).join(', ')}`);
+
+                    // Submit custom ward names to MASTER Column R if any
+                    for (const product of data.products) {
+                        const finalWardName = product.wardName;
+                        if (finalWardName) {
+                            submitToMaster(finalWardName);
+                        }
+                    }
+
                     setTimeout(() => updateStoreOutSheet(), 1000);
                 } else {
                     toast.error(res.message || 'Failed to create Store Out');
@@ -311,10 +337,6 @@ export default () => {
 
                 for (let i = 0; i < data.products.length; i++) {
                     const product = data.products[i];
-                    if (i > 0) {
-                        const lastNumber = parseInt(currentIndentNumber.replace('SI-', ''), 10);
-                        currentIndentNumber = `SI-${String(lastNumber + 1).padStart(4, '0')}`;
-                    }
 
                     const row: Partial<IndentSheet> = {
                         timestamp: timestamp,
@@ -349,6 +371,15 @@ export default () => {
 
                 if (res.success) {
                     toast.success(`Purchase indent created! Indent No: ${indentRows.map(r => r.indentNumber).join(', ')}`);
+
+                    // Submit custom ward names to MASTER Column R if any
+                    for (const product of data.products) {
+                        const finalWardName = product.areaOfUse;
+                        if (finalWardName) {
+                            submitToMaster(finalWardName);
+                        }
+                    }
+
                     setTimeout(() => updateIndentSheet(), 1000);
                 } else {
                     toast.error(res.message || 'Failed to create indent');
@@ -381,19 +412,19 @@ export default () => {
                 <ClipboardList size={50} className="text-primary" />
             </Heading>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6 p-5">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-4 p-5">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <FormField
                             control={form.control}
                             name="indenterName"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
+                                    <FormLabel className="text-sm font-medium">
                                         Indenter Name
                                         <span className="text-destructive">*</span>
                                     </FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Enter indenter name" {...field} />
+                                        <Input placeholder="Enter indenter name" {...field} className="h-9" />
                                     </FormControl>
                                 </FormItem>
                             )}
@@ -405,13 +436,13 @@ export default () => {
                             name="indentType"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
+                                    <FormLabel className="text-sm font-medium">
                                         Indent Type
                                         <span className="text-destructive">*</span>
                                     </FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl>
-                                            <SelectTrigger className="w-full">
+                                            <SelectTrigger className="w-full h-9">
                                                 <SelectValue placeholder="Select type" />
                                             </SelectTrigger>
                                         </FormControl>
@@ -430,12 +461,12 @@ export default () => {
                             name="indentApproveBy"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
-                                        {indentType === 'Store Out' ? 'Approval Needed' : 'Approved By'}
+                                    <FormLabel className="text-sm font-medium">
+                                        Approval Needed
                                         <span className="text-destructive">*</span>
                                     </FormLabel>
                                     <FormControl>
-                                        <Input placeholder={indentType === 'Store Out' ? "Enter approval needed" : "Enter approved by"} {...field} />
+                                        <Input placeholder="Enter approval needed" {...field} className="h-9" />
                                     </FormControl>
                                 </FormItem>
                             )}
@@ -443,34 +474,9 @@ export default () => {
                     </div>
 
 
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-lg font-semibold">Products</h2>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() =>
-                                    append({
-                                        department: '',
-                                        groupHead: '',
-                                        productName: '',
-                                        quantity: 1,
-                                        uom: '',
-                                        areaOfUse: '',
-                                        // @ts-ignore
-                                        priority: undefined,
-                                        attachment: undefined,
-                                        // Initialize Store Out specific fields
-                                        floor: '',
-                                        wardName: '',
-                                        category: '',
-                                        requestedBy: '',
-                                        issueDate: undefined,
-                                    })
-                                }
-                            >
-                                Add Product
-                            </Button>
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center px-1">
+                            <h2 className="text-md font-semibold text-primary/80">Products</h2>
                         </div>
 
 
@@ -486,192 +492,245 @@ export default () => {
                             return (
                                 <div
                                     key={field.id}
-                                    className="flex flex-col gap-4 border p-4 rounded-lg"
+                                    className="flex flex-col gap-3 border p-4 rounded-lg bg-card text-card-foreground shadow-sm"
                                 >
-                                    <div className="flex justify-between">
-                                        <h3 className="text-md font-semibold">
+                                    <div className="flex justify-between items-center border-b pb-2 mb-1">
+                                        <h3 className="text-sm font-bold text-muted-foreground uppercase">
                                             Product {index + 1}
                                         </h3>
-                                        <Button
-                                            variant="destructive"
-                                            type="button"
-                                            onClick={() => fields.length > 1 && remove(index)}
-                                            disabled={fields.length === 1}
-                                        >
-                                            <Trash />
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            {index === fields.length - 1 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 text-xs"
+                                                    onClick={() =>
+                                                        append({
+                                                            department: '',
+                                                            groupHead: '',
+                                                            productName: '',
+                                                            quantity: 1,
+                                                            uom: '',
+                                                            areaOfUse: '',
+                                                            // @ts-ignore
+                                                            priority: undefined,
+                                                            attachment: undefined,
+                                                            wardName: '',
+                                                            category: '',
+                                                            issueDate: new Date().toISOString().split('T')[0],
+                                                        })
+                                                    }
+                                                >
+                                                    <Plus className="mr-1 h-3.5 w-3.5" /> Add Product
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                type="button"
+                                                size="sm"
+                                                className="h-8 w-8 p-0 text-destructive hover:text-destructive/90"
+                                                onClick={() => fields.length > 1 && remove(index)}
+                                                disabled={fields.length === 1}
+                                            >
+                                                <Trash className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="grid gap-4">
-                                        <div className={`grid grid-cols-1 ${indentType === 'Store Out' ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
+
+                                    {/* Consolidated Grid Container - Clear 4-column layout */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+                                        {/* Row 1: Location & Categorization */}
+                                        {indentType === 'Store Out' ? (
                                             <FormField
                                                 control={form.control}
-                                                name={`products.${index}.department`}
+                                                name={`products.${index}.wardName`}
                                                 render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Department<span className="text-destructive">*</span></FormLabel>
-                                                        <Select onValueChange={field.onChange} value={field.value}>
-                                                            <FormControl>
-                                                                <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-3">
-                                                                    <Search className="mr-2 h-4 w-4 opacity-50" />
-                                                                    <input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onKeyDown={(e) => e.stopPropagation()} className="flex h-10 w-full bg-transparent text-sm outline-none" />
-                                                                </div>
-                                                                {options?.departments.filter(d => d.toLowerCase().includes(searchTerm.toLowerCase())).map((d, i) => (
-                                                                    <SelectItem key={i} value={d}>{d}</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            {indentType === 'Store Out' && (
-                                                <>
-                                                    <FormField
-                                                        control={form.control}
-                                                        name={`products.${index}.floor`}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Floor<span className="text-destructive">*</span></FormLabel>
-                                                                <FormControl><Input placeholder="Enter floor" {...field} /></FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                    <FormField
-                                                        control={form.control}
-                                                        name={`products.${index}.wardName`}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Ward Name<span className="text-destructive">*</span></FormLabel>
-                                                                <FormControl><Input placeholder="Enter ward name" {...field} /></FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                    <FormField
-                                                        control={form.control}
-                                                        name={`products.${index}.issueDate`}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Issue Date<span className="text-destructive">*</span></FormLabel>
-                                                                <FormControl><Input type="date" {...field} /></FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                    <FormField
-                                                        control={form.control}
-                                                        name={`products.${index}.requestedBy`}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Requested By<span className="text-destructive">*</span></FormLabel>
-                                                                <FormControl><Input placeholder="Requested by" {...field} /></FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                </>
-                                            )}
-
-                                            <FormField
-                                                control={form.control}
-                                                name={indentType === 'Store Out' ? `products.${index}.category` : `products.${index}.groupHead`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>{indentType === 'Store Out' ? 'Category' : 'Group Head'}<span className="text-destructive">*</span></FormLabel>
-                                                        <Select onValueChange={field.onChange} value={field.value}>
-                                                            <FormControl>
-                                                                <SelectTrigger><SelectValue placeholder={`Select ${indentType === 'Store Out' ? 'category' : 'group head'}`} /></SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-3">
-                                                                    <Search className="mr-2 h-4 w-4 opacity-50" />
-                                                                    <input placeholder="Search..." value={indentType === 'Store Out' ? searchTermCategory : searchTermGroupHead} onChange={(e) => indentType === 'Store Out' ? setSearchTermCategory(e.target.value) : setSearchTermGroupHead(e.target.value)} onKeyDown={(e) => e.stopPropagation()} className="flex h-10 w-full bg-transparent text-sm outline-none" />
-                                                                </div>
-                                                                {Object.keys(options?.groupHeads || {}).filter(k => k.toLowerCase().includes(indentType === 'Store Out' ? searchTermCategory.toLowerCase() : searchTermGroupHead.toLowerCase())).map((k, i) => (
-                                                                    <SelectItem key={i} value={k}>{k}</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            {indentType !== 'Store Out' && (
-                                                <FormField
-                                                    control={form.control}
-                                                    name={`products.${index}.productName`}
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Product Name<span className="text-destructive">*</span></FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value} disabled={!groupHead}>
-                                                                <FormControl><SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger></FormControl>
-                                                                <SelectContent>
-                                                                    <div className="flex items-center border-b px-3 pb-3">
-                                                                        <Search className="mr-2 h-4 w-4 opacity-50" />
-                                                                        <input placeholder="Search..." value={searchTermProductName} onChange={(e) => setSearchTermProductName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} className="flex h-10 w-full bg-transparent text-sm outline-none" />
-                                                                    </div>
-                                                                    {!showAddProduct[index] && (
-                                                                        <div className="flex items-center px-3 py-2 cursor-pointer hover:bg-accent" onClick={() => setShowAddProduct(prev => ({ ...prev, [index]: true }))}>
-                                                                            <Plus className="mr-2 h-4 w-4" /><span className="text-sm font-medium">Add New Product</span>
-                                                                        </div>
-                                                                    )}
-                                                                    {showAddProduct[index] && (
-                                                                        <div className="flex items-center gap-2 px-3 py-2 border-b">
-                                                                            <Input placeholder="New product" value={newProductName[index] || ''} onChange={(e) => setNewProductName(prev => ({ ...prev, [index]: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewProductLocally(index, groupHead!))} />
-                                                                            <Button type="button" size="sm" onClick={() => addNewProductLocally(index, groupHead!)}>Add</Button>
-                                                                        </div>
-                                                                    )}
-                                                                    {productOptions.filter(p => p.toLowerCase().includes(searchTermProductName.toLowerCase())).map((p, i) => (
-                                                                        <SelectItem key={i} value={p}>{p}</SelectItem>
+                                                    <FormItem className="md:col-span-1">
+                                                        <FormLabel className="text-sm">Ward Name<span className="text-destructive">*</span></FormLabel>
+                                                        <FormControl>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    placeholder="Search/enter ward"
+                                                                    {...field}
+                                                                    list={`ward-options-${index}`}
+                                                                    className="h-9"
+                                                                />
+                                                                <datalist id={`ward-options-${index}`}>
+                                                                    {options?.wardNames.map((w, i) => (
+                                                                        <option key={i} value={w} />
                                                                     ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            )}
-
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.quantity`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Quantity<span className="text-destructive">*</span></FormLabel>
-                                                        <FormControl><Input type="number" {...field} /></FormControl>
+                                                                </datalist>
+                                                            </div>
+                                                        </FormControl>
                                                     </FormItem>
                                                 )}
                                             />
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.uom`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>UOM<span className="text-destructive">*</span></FormLabel>
-                                                        <FormControl><Input {...field} placeholder="e.g. Pcs, Kgs" /></FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
+                                        ) : (
                                             <FormField
                                                 control={form.control}
                                                 name={`products.${index}.areaOfUse`}
                                                 render={({ field }) => (
+                                                    <FormItem className="md:col-span-1">
+                                                        <FormLabel className="text-sm">Ward Name<span className="text-destructive">*</span></FormLabel>
+                                                        <FormControl>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    placeholder="Search/enter ward"
+                                                                    {...field}
+                                                                    list={`area-options-${index}`}
+                                                                    className="h-9"
+                                                                />
+                                                                <datalist id={`area-options-${index}`}>
+                                                                    {options?.wardNames.map((w, i) => (
+                                                                        <option key={i} value={w} />
+                                                                    ))}
+                                                                </datalist>
+                                                            </div>
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+
+                                        <FormField
+                                            control={form.control}
+                                            name={indentType === 'Store Out' ? `products.${index}.category` : `products.${index}.groupHead`}
+                                            render={({ field }) => (
+                                                <FormItem className="md:col-span-1">
+                                                    <FormLabel className="text-sm">{indentType === 'Store Out' ? 'Group of head' : 'Group Head'}<span className="text-destructive">*</span></FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger className="w-full h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <div className="flex items-center border-b px-3 pb-3">
+                                                                <Search className="mr-2 h-4 w-4 opacity-50" />
+                                                                <input placeholder="Search..." value={indentType === 'Store Out' ? searchTermCategory : searchTermGroupHead} onChange={(e) => indentType === 'Store Out' ? setSearchTermCategory(e.target.value) : setSearchTermGroupHead(e.target.value)} onKeyDown={(e) => e.stopPropagation()} className="flex h-10 w-full bg-transparent text-sm outline-none" />
+                                                            </div>
+                                                            {Object.keys(options?.groupHeads || {}).filter(k => k.toLowerCase().includes(indentType === 'Store Out' ? searchTermCategory.toLowerCase() : searchTermGroupHead.toLowerCase())).map((k, i) => (
+                                                                <SelectItem key={i} value={k}>{k}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name={`products.${index}.department`}
+                                            render={({ field }) => (
+                                                <FormItem className="md:col-span-1">
+                                                    <FormLabel className="text-sm">Department<span className="text-destructive">*</span></FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger className="w-full h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <div className="flex items-center border-b px-3 pb-3">
+                                                                <Search className="mr-2 h-4 w-4 opacity-50" />
+                                                                <input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onKeyDown={(e) => e.stopPropagation()} className="flex h-10 w-full bg-transparent text-sm outline-none" />
+                                                            </div>
+                                                            {options?.departments.filter(d => d.toLowerCase().includes(searchTerm.toLowerCase())).map((d, i) => (
+                                                                <SelectItem key={i} value={d}>{d}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        {indentType === 'Store Out' && (
+                                            <FormField
+                                                control={form.control}
+                                                name={`products.${index}.issueDate`}
+                                                render={({ field }) => (
+                                                    <FormItem className="md:col-span-1">
+                                                        <FormLabel className="text-sm">Issue Date<span className="text-destructive">*</span></FormLabel>
+                                                        <FormControl><Input type="date" {...field} className="h-9" /></FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+
+                                        {/* Row 2: Product Details */}
+                                        <div className="md:col-span-2">
+                                            <FormField
+                                                control={form.control}
+                                                name={`products.${index}.productName`}
+                                                render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>Area Of Use<span className="text-destructive">*</span></FormLabel>
-                                                        <FormControl><Input placeholder="Enter area of use" {...field} /></FormControl>
+                                                        <FormLabel className="text-sm">Product Name<span className="text-destructive">*</span></FormLabel>
+                                                        <Select onValueChange={field.onChange} value={field.value} disabled={!groupHead}>
+                                                            <FormControl><SelectTrigger className="w-full h-9"><SelectValue placeholder="Select product" /></SelectTrigger></FormControl>
+                                                            <SelectContent>
+                                                                <div className="flex items-center border-b px-3 pb-3">
+                                                                    <Search className="mr-2 h-4 w-4 opacity-50" />
+                                                                    <input placeholder="Search..." value={searchTermProductName} onChange={(e) => setSearchTermProductName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} className="flex h-10 w-full bg-transparent text-sm outline-none" />
+                                                                </div>
+                                                                {!showAddProduct[index] && (
+                                                                    <div className="flex items-center px-3 py-2 cursor-pointer hover:bg-accent" onClick={() => setShowAddProduct(prev => ({ ...prev, [index]: true }))}>
+                                                                        <Plus className="mr-2 h-4 w-4" /><span className="text-sm font-medium">Add New Product</span>
+                                                                    </div>
+                                                                )}
+                                                                {showAddProduct[index] && (
+                                                                    <div className="flex items-center gap-2 px-3 py-2 border-b">
+                                                                        <Input placeholder="New product" value={newProductName[index] || ''} onChange={(e) => setNewProductName(prev => ({ ...prev, [index]: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewProductLocally(index, groupHead!))} className="h-9" />
+                                                                        <Button type="button" size="sm" onClick={() => addNewProductLocally(index, groupHead!)}>Add</Button>
+                                                                    </div>
+                                                                )}
+                                                                {productOptions.filter(p => p.toLowerCase().includes(searchTermProductName.toLowerCase())).map((p, i) => (
+                                                                    <SelectItem key={i} value={p}>{p}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
                                                     </FormItem>
                                                 )}
                                             />
                                         </div>
 
+                                        <FormField
+                                            control={form.control}
+                                            name={`products.${index}.quantity`}
+                                            render={({ field }) => (
+                                                <FormItem className="md:col-span-1">
+                                                    <FormLabel className="text-sm">Quantity<span className="text-destructive">*</span></FormLabel>
+                                                    <FormControl><Input type="number" {...field} className="h-9" /></FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name={`products.${index}.uom`}
+                                            render={({ field }) => (
+                                                <FormItem className="md:col-span-1">
+                                                    <FormLabel className="text-sm">UOM<span className="text-destructive">*</span></FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger className="w-full h-9"><SelectValue placeholder="Unit" /></SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {['Kg', 'Pcs', 'Packets', 'Liter', 'Box'].map((u) => (
+                                                                <SelectItem key={u} value={u}>{u}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        {/* Row 3: Attachment & Specifications (Purchase Only) */}
                                         {indentType !== 'Store Out' && (
                                             <>
                                                 <FormField
                                                     control={form.control}
                                                     name={`products.${index}.attachment`}
                                                     render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Attachment</FormLabel>
-                                                            <FormControl><Input type="file" onChange={(e) => field.onChange(e.target.files?.[0])} /></FormControl>
+                                                        <FormItem className="md:col-span-2">
+                                                            <FormLabel className="text-sm">Attachment</FormLabel>
+                                                            <FormControl><Input type="file" onChange={(e) => field.onChange(e.target.files?.[0])} className="h-9" /></FormControl>
                                                         </FormItem>
                                                     )}
                                                 />
@@ -679,9 +738,9 @@ export default () => {
                                                     control={form.control}
                                                     name={`products.${index}.specifications`}
                                                     render={({ field }) => (
-                                                        <FormItem className="w-full">
-                                                            <FormLabel>Specifications</FormLabel>
-                                                            <FormControl><Textarea placeholder="Enter specifications" className="resize-y" {...field} /></FormControl>
+                                                        <FormItem className="md:col-span-2">
+                                                            <FormLabel className="text-sm">Specifications</FormLabel>
+                                                            <FormControl><Textarea placeholder="Enter specifications" className="resize-y h-9 min-h-[36px]" {...field} /></FormControl>
                                                         </FormItem>
                                                     )}
                                                 />
@@ -708,6 +767,6 @@ export default () => {
                     </div>
                 </form>
             </Form>
-        </div>
+        </div >
     );
 };
