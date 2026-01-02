@@ -7,6 +7,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    DialogTrigger,
 } from '../ui/dialog';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useSheets } from '@/context/SheetsContext';
@@ -18,11 +19,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { Input } from '../ui/input';
 import { PuffLoader as Loader } from 'react-spinners';
-import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 import { postToSheet } from '@/lib/fetchers';
 import { PackageCheck } from 'lucide-react';
-import { Tabs, TabsContent } from '../ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate } from '@/lib/utils';
@@ -54,57 +54,28 @@ interface StoreOutTableData {
     indentType: string;
     wardName: string;
     searialNumber?: string | number;
-    // Helper for update
     originalRow: any;
+}
+
+interface GroupedStoreOutData {
+    issueNo: string;
+    issueDate: string;
+    requestedBy: string;
+    department: string;
+    wardName: string;
+    items: StoreOutTableData[];
 }
 
 export default () => {
     const { storeOutSheet, indentLoading, updateStoreOutSheet } = useSheets();
     const { user } = useAuth();
-    const [openDialog, setOpenDialog] = useState(false);
-    const [tableData, setTableData] = useState<StoreOutTableData[]>([]);
-    const [historyData, setHistoryData] = useState<StoreOutTableData[]>([]);
-    const [selectedItem, setSelectedItem] = useState<StoreOutTableData | null>(null);
+    const [selectedGroup, setSelectedGroup] = useState<GroupedStoreOutData | null>(null);
+    const [selectedHistory, setSelectedHistory] = useState<GroupedStoreOutData | null>(null);
+    const [tableData, setTableData] = useState<GroupedStoreOutData[]>([]);
+    const [historyData, setHistoryData] = useState<GroupedStoreOutData[]>([]);
     const [loading, setLoading] = useState(false);
 
-    // Fetching table data
-    useEffect(() => {
-        console.log("=== Store Out Approval Debug ===");
-        console.log("storeOutSheet:", storeOutSheet);
-        console.log("storeOutSheet length:", storeOutSheet?.length);
-
-        if (!storeOutSheet) {
-            console.log("storeOutSheet is null/undefined");
-            return;
-        }
-
-        // Pending: Planned (Col L) is NOT NULL && Actual (Col M) is NULL
-        const pending = storeOutSheet
-            .filter((row) => {
-                // Adjust filter logic based on your exact requirement for 'Pending'
-                // For now, assuming Pending means status is empty or not Approved/Rejected
-                return !row.status || (row.status !== 'Approved' && row.status !== 'Rejected');
-            })
-            .map(mapRowToTableData);
-
-        // History: Status is Approved or Rejected
-        const history = storeOutSheet
-            .filter((row) => row.status === 'Approved' || row.status === 'Rejected')
-            .map(mapRowToTableData);
-
-        console.log("Pending items:", pending);
-        console.log("History items:", history);
-
-        setTableData(pending);
-        setHistoryData(history);
-    }, [storeOutSheet]);
-
     const mapRowToTableData = (row: any): StoreOutTableData => {
-        // Debug logging for row keys
-        if (row.issueNo === 'IS-001') { // Log only for the first item to avoid spam
-            console.log("Row Keys for IS-001:", Object.keys(row));
-            console.log("Row Data for IS-001:", row);
-        }
         return {
             issueNo: row.issueNo || row['Issue No'],
             issueDate: formatDate(new Date(row.issueDate || row['Issue Date'])),
@@ -124,14 +95,41 @@ export default () => {
             searialNumber: row.searialNumber,
             originalRow: row
         };
-
     };
+
+    useEffect(() => {
+        if (!storeOutSheet) return;
+
+        const allItems = storeOutSheet.map(mapRowToTableData);
+        const pendingItems = allItems.filter((row) => !row.status || (row.status !== 'Approved' && row.status !== 'Rejected'));
+        const historyItems = allItems.filter((row) => row.status === 'Approved' || row.status === 'Rejected');
+
+        const groupItems = (items: StoreOutTableData[]) => {
+            return items.reduce((acc, item) => {
+                if (!acc[item.issueNo]) {
+                    acc[item.issueNo] = {
+                        issueNo: item.issueNo,
+                        issueDate: item.issueDate,
+                        requestedBy: item.requestedBy,
+                        department: item.department,
+                        wardName: item.wardName,
+                        items: [],
+                    };
+                }
+                acc[item.issueNo].items.push(item);
+                return acc;
+            }, {} as Record<string, GroupedStoreOutData>);
+        };
+
+        setTableData(Object.values(groupItems(pendingItems)).reverse());
+        setHistoryData(Object.values(groupItems(historyItems)).reverse());
+    }, [storeOutSheet]);
 
     const onDownloadClick = async () => {
         setLoading(true);
         try {
             const workbook = XLSX.utils.book_new();
-            const worksheetData = tableData.map(item => ({
+            const flatData = tableData.flatMap(group => group.items.map(item => ({
                 'Issue No.': item.issueNo,
                 'Requested By': item.requestedBy,
                 'Department': item.department,
@@ -139,8 +137,10 @@ export default () => {
                 'Date': item.issueDate,
                 'Quantity': item.qty,
                 'Unit': item.unit,
-            }));
-            const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+                'Ward': item.wardName,
+                'S.No': item.searialNumber
+            })));
+            const worksheet = XLSX.utils.json_to_sheet(flatData);
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Store Out Pending');
             XLSX.writeFile(workbook, `Store_Out_Pending_${new Date().toISOString().split('T')[0]}.xlsx`);
             toast.success('Excel file downloaded successfully!');
@@ -152,274 +152,269 @@ export default () => {
         }
     };
 
-    const columns: ColumnDef<StoreOutTableData>[] = [
+    const columns: ColumnDef<GroupedStoreOutData>[] = [
         {
             id: 'actions',
             header: 'Action',
             cell: ({ row }) => (
-                <Button
-                    size="sm"
-                    onClick={() => {
-                        setSelectedItem(row.original);
-                        setOpenDialog(true);
-                    }}
-                >
-                    Action
+                <Button size="sm" variant="outline" onClick={() => setSelectedGroup(row.original)}>
+                    Action ({row.original.items.length})
                 </Button>
             )
         },
-        {
-            accessorKey: 'searialNumber',
-            header: 'S.No.',
-            cell: ({ getValue }) => String(getValue() || '-'),
-        },
-        {
-            accessorKey: 'issueNo',
-            header: 'Issue No.',
-            cell: ({ row }) => (
-                <span className="font-medium">
-                    {row.getValue('issueNo')}
-                </span>
-            )
-        },
+        { accessorKey: 'issueNo', header: 'Issue No.' },
         { accessorKey: 'issueDate', header: 'Date' },
         { accessorKey: 'requestedBy', header: 'Requested By' },
-        { accessorKey: 'wardName', header: 'Ward Name' },
-        { accessorKey: 'groupHead', header: 'Group Head' },
-        { accessorKey: 'product', header: 'Product' },
-        { accessorKey: 'qty', header: 'Qty' },
-        { accessorKey: 'unit', header: 'Unit' },
         { accessorKey: 'department', header: 'Department' },
+        { accessorKey: 'wardName', header: 'Ward Name' },
+        {
+            header: 'Products',
+            cell: ({ row }) => (
+                <div className="max-w-[200px] break-words text-xs">
+                    {row.original.items.map(i => i.product).join(', ')}
+                </div>
+            )
+        },
     ];
 
-    const historyColumns: ColumnDef<StoreOutTableData>[] = [
+    const historyColumns: ColumnDef<GroupedStoreOutData>[] = [
         {
-            accessorKey: 'searialNumber',
-            header: 'S.No.',
-            cell: ({ getValue }) => String(getValue() || '-'),
+            id: 'actions',
+            header: 'Action',
+            cell: ({ row }) => (
+                <Button size="sm" variant="outline" onClick={() => setSelectedHistory(row.original)}>
+                    View ({row.original.items.length})
+                </Button>
+            )
         },
         { accessorKey: 'issueNo', header: 'Issue No.' },
-        { accessorKey: 'issueDate', header: 'Request Date' },
-        { accessorKey: 'actual', header: 'Approval Date', cell: ({ row }) => row.original.actual ? formatDate(new Date(row.original.actual)) : '-' },
+        { accessorKey: 'issueDate', header: 'Date' },
         { accessorKey: 'requestedBy', header: 'Requested By' },
-        { accessorKey: 'wardName', header: 'Ward Name' },
-        { accessorKey: 'groupHead', header: 'Group Head' },
-        { accessorKey: 'product', header: 'Product' },
-        { accessorKey: 'qty', header: 'Req Qty' },
-        { accessorKey: 'unit', header: 'Unit' },
         { accessorKey: 'department', header: 'Department' },
-        { accessorKey: 'approveQty', header: 'Approve Qty' },
         {
-            accessorKey: 'status',
-            header: 'Status',
-            cell: ({ row }) => {
-                const status = row.original.status;
-                const variant = status === 'Rejected' ? 'reject' : 'secondary';
-                return <Pill variant={variant}>{status}</Pill>;
-            }
+            header: 'Products',
+            cell: ({ row }) => (
+                <div className="max-w-[200px] break-words text-xs">
+                    {row.original.items.map(i => i.product).join(', ')}
+                </div>
+            )
         },
     ];
 
+    return (
+        <div>
+            <Dialog open={!!(selectedGroup || selectedHistory)} onOpenChange={(open) => {
+                if (!open) {
+                    setSelectedGroup(null);
+                    setSelectedHistory(null);
+                }
+            }}>
+                <Tabs defaultValue="pending">
+                    <Heading heading="Store Out Approval" subtext="Approve store out requests" tabs>
+                        <PackageCheck size={50} className="text-primary" />
+                    </Heading>
+                    <TabsContent value="pending">
+                        <DataTable
+                            data={tableData}
+                            columns={columns}
+                            searchFields={['issueNo', 'department', 'requestedBy']}
+                            dataLoading={indentLoading}
+                            extraActions={
+                                <Button
+                                    variant="default"
+                                    onClick={onDownloadClick}
+                                    style={{
+                                        background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
+                                        border: "none",
+                                        borderRadius: "8px",
+                                        padding: "0 16px",
+                                        fontWeight: "bold",
+                                        boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                    }}
+                                >
+                                    <DownloadOutlined />
+                                    {loading ? "Downloading..." : "Download"}
+                                </Button>
+                            }
+                        />
+                    </TabsContent>
+                    <TabsContent value="history">
+                        <DataTable
+                            data={historyData}
+                            columns={historyColumns}
+                            searchFields={['issueNo', 'department', 'requestedBy']}
+                            dataLoading={indentLoading}
+                        />
+                    </TabsContent>
+                </Tabs>
+
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    {selectedGroup && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Approve Requests - {selectedGroup.issueNo}</DialogTitle>
+                                <DialogDescription>
+                                    {selectedGroup.requestedBy} | {selectedGroup.department} | {selectedGroup.wardName}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-6 py-4">
+                                <StoreOutApprovalForm
+                                    items={selectedGroup.items}
+                                    onSuccess={() => {
+                                        setSelectedGroup(null);
+                                        setTimeout(() => updateStoreOutSheet(), 1000);
+                                    }}
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {selectedHistory && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Approval History - {selectedHistory.issueNo}</DialogTitle>
+                                <DialogDescription>{selectedHistory.requestedBy} | {selectedHistory.department}</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b text-muted-foreground text-left">
+                                            <th className="py-2 font-medium">Product</th>
+                                            <th className="py-2 font-medium">Req Qty</th>
+                                            <th className="py-2 font-medium">Appr Qty</th>
+                                            <th className="py-2 font-medium">Status</th>
+                                            <th className="py-2 font-medium">S.No</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {selectedHistory.items.map((item, idx) => (
+                                            <tr key={idx} className="border-b last:border-0 border-muted/20">
+                                                <td className="py-2">{item.product}</td>
+                                                <td className="py-2">{item.qty} {item.unit}</td>
+                                                <td className="py-2">{item.approveQty} {item.unit}</td>
+                                                <td className="py-2">
+                                                    <Pill variant={item.status === 'Rejected' ? 'reject' : 'secondary'}>{item.status}</Pill>
+                                                </td>
+                                                <td className="py-2">{item.searialNumber || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                    <DialogFooter>
+                        <DialogClose asChild><Button variant="outline">Close</Button></DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+};
+
+const StoreOutApprovalForm = ({ items, onSuccess }: { items: StoreOutTableData[], onSuccess: () => void }) => {
+    const { storeOutSheet } = useSheets();
     const schema = z.object({
-        status: z.string().nonempty('Status is required'),
-        approveQty: z.coerce.number().min(0, 'Quantity cannot be negative'),
+        approvals: z.array(z.object({
+            searialNumber: z.union([z.string(), z.number()]),
+            status: z.string().nonempty('Status is required'),
+            approveQty: z.coerce.number().min(0, 'Quantity cannot be negative'),
+            product: z.string(),
+            originalRow: z.any()
+        }))
     });
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
         defaultValues: {
-            status: '',
-            approveQty: 0,
-        },
+            approvals: items.map(item => ({
+                searialNumber: item.searialNumber || '',
+                status: '',
+                approveQty: item.qty,
+                product: item.product,
+                originalRow: item.originalRow
+            }))
+        }
     });
 
-    useEffect(() => {
-        if (selectedItem) {
-            form.reset({
-                status: '',
-                approveQty: selectedItem.qty, // Default to requested qty
-            });
-        }
-    }, [selectedItem]);
-
-    async function onSubmit(values: z.infer<typeof schema>) {
-        if (!selectedItem) return;
-
-        // Format date as DD/MM/YYYY HH:mm:ss
+    const onSubmit = async (values: z.infer<typeof schema>) => {
         const now = new Date();
-        const day = now.getDate().toString().padStart(2, '0');
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const year = now.getFullYear();
-        const hours = now.getHours().toString().padStart(2, '0');
-        const minutes = now.getMinutes().toString().padStart(2, '0');
-        const seconds = now.getSeconds().toString().padStart(2, '0');
-        const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-
-        // Exclude 'planned' from the payload
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { planned, ...restOfRow } = selectedItem.originalRow;
+        const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
         try {
-            await postToSheet(
-                storeOutSheet
-                    .filter((s) => selectedItem.searialNumber ? String(s.searialNumber) === String(selectedItem.searialNumber) : s.issueNo === selectedItem?.issueNo)
-                    .map((prev) => {
-                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                        const { searialNumber, planned, ...rest } = prev;
-                        return {
-                            ...rest,
-                            actual: formattedDate,           // Column M
-                            status: values.status,           // Column R
-                            approveQty: values.approveQty,   // Column S
-                        };
-                    }),
-                'update',
-                'STORE OUT'
-            );
+            const payload = values.approvals.map(appr => {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { searialNumber, planned, ...rest } = appr.originalRow;
+                return {
+                    ...rest,
+                    actual: formattedDate,
+                    status: appr.status,
+                    approveQty: appr.approveQty,
+                };
+            });
 
-            toast.success(`Store Out Request ${values.status}!`);
-            setOpenDialog(false);
-            form.reset();
-            setTimeout(() => updateStoreOutSheet(), 1000);
+            await postToSheet(payload, 'update', 'STORE OUT');
+            toast.success(`Updated ${items.length} items`);
+            onSuccess();
         } catch (e) {
-            console.error(e);
-            toast.error('Failed to update request');
+            toast.error('Failed to update');
         }
-    }
+    };
 
     return (
-        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-            <Tabs defaultValue="pending">
-                <Heading heading="Store Out Approval" subtext="Approve store out requests" tabs>
-                    <PackageCheck size={50} className="text-primary" />
-                </Heading>
-                <TabsContent value="pending">
-                    <DataTable
-                        data={tableData}
-                        columns={columns}
-                        searchFields={['product', 'department', 'requestedBy', 'issueNo']}
-                        dataLoading={indentLoading}
-                        extraActions={
-                            <Button
-                                variant="default"
-                                onClick={onDownloadClick}
-                                style={{
-                                    background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
-                                    border: "none",
-                                    borderRadius: "8px",
-                                    padding: "0 16px",
-                                    fontWeight: "bold",
-                                    boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                }}
-                            >
-                                <DownloadOutlined />
-                                {loading ? "Downloading..." : "Download"}
-                            </Button>
-                        }
-                    />
-                </TabsContent>
-                <TabsContent value="history">
-                    <DataTable
-                        data={historyData}
-                        columns={historyColumns}
-                        searchFields={['product', 'department', 'requestedBy', 'issueNo']}
-                        dataLoading={indentLoading}
-                    />
-                </TabsContent>
-            </Tabs>
-
-            {selectedItem && (
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Approve Request</DialogTitle>
-                        <DialogDescription>
-                            Review details for Issue No: {selectedItem.issueNo}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid grid-cols-2 gap-4 py-4 text-sm">
-                        <div className="col-span-2 grid grid-cols-2 gap-4 border-b pb-4">
-                            <div>
-                                <span className="font-semibold block text-xs text-muted-foreground">Department</span>
-                                {selectedItem.department}
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                    {items.map((item, index) => (
+                        <div key={item.searialNumber || index} className="border p-4 rounded-md bg-muted/20 space-y-3">
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="font-semibold text-sm">{item.product}</span>
+                                <span className="text-xs text-muted-foreground bg-primary/5 px-2 py-1 rounded">S.No: {item.searialNumber} | Req Qty: {item.qty} {item.unit}</span>
                             </div>
-                            <div>
-                                <span className="font-semibold block text-xs text-muted-foreground">Issue No</span>
-                                {selectedItem.issueNo}
-                            </div>
-                        </div>
-
-                        <div className="col-span-2 grid grid-cols-2 gap-4 border-b pb-4">
-                            <div>
-                                <span className="font-semibold block text-xs text-muted-foreground">Indenter Name</span>
-                                {selectedItem.indenterName}
-                            </div>
-                            <div>
-                                <span className="font-semibold block text-xs text-muted-foreground">Indent Type</span>
-                                {selectedItem.indentType}
-                            </div>
-                        </div>
-
-                        <div className="col-span-2 border-b pb-4 grid grid-cols-2">
-                            <div>
-                                <span className="font-semibold block text-xs text-muted-foreground">Qty</span>
-                                <span className="text-lg font-bold text-primary">{selectedItem.qty}</span>
-                            </div>
-                            <div>
-                                <span className="font-semibold block text-xs text-muted-foreground">S.No.</span>
-                                <span className="text-lg font-bold">{selectedItem.searialNumber || '-'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                            <FormField
-                                control={form.control}
-                                name="status"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Status</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name={`approvals.${index}.status`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-xs">Status</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger className="h-8">
+                                                        <SelectValue placeholder="Status" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="Approved">Approved</SelectItem>
+                                                    <SelectItem value="Rejected">Rejected</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name={`approvals.${index}.approveQty`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-xs">Approve Qty</FormLabel>
                                             <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select status" />
-                                                </SelectTrigger>
+                                                <Input type="number" {...field} className="h-8" />
                                             </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="Approved">Approved</SelectItem>
-                                                <SelectItem value="Rejected">Rejected</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="approveQty"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Approved Quantity</FormLabel>
-                                        <FormControl>
-                                            <Input type="number" {...field} />
-                                        </FormControl>
-                                    </FormItem>
-                                )}
-                            />
-
-                            <DialogFooter>
-                                <Button type="submit" disabled={form.formState.isSubmitting}>
-                                    {form.formState.isSubmitting ? <Loader size={16} color="white" /> : 'Submit'}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </Form>
-                </DialogContent>
-            )}
-        </Dialog>
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <Button type="submit" disabled={form.formState.isSubmitting} className="w-full">
+                    {form.formState.isSubmitting ? <Loader size={16} color="white" /> : `Approve ${items.length} Items`}
+                </Button>
+            </form>
+        </Form>
     );
 };

@@ -23,7 +23,7 @@ import { Input } from '../ui/input';
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { UserCheck, PenSquare } from 'lucide-react';
+import { UserCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
@@ -40,6 +40,14 @@ interface VendorUpdateData {
     vendorName?: string;
     searialNumber?: string | number;
 }
+interface GroupedVendorUpdateData {
+    indentNo: string;
+    indenter: string;
+    department: string;
+    vendorType: 'Three Party' | 'Regular';
+    items: VendorUpdateData[];
+}
+
 interface HistoryData {
     indentNo: string;
     indenter: string;
@@ -50,25 +58,272 @@ interface HistoryData {
     rate: number;
     vendorType: 'Three Party' | 'Regular';
     date: string;
-    lastUpdated?: string;
     vendorName?: string;
     searialNumber?: string | number;
 }
+
+interface GroupedHistoryData {
+    indentNo: string;
+    indenter: string;
+    department: string;
+    date: string;
+    items: HistoryData[];
+}
+
+const ThreePartyFields = ({ index, form, vendors, options }: any) => {
+    const { fields } = useFieldArray({ control: form.control, name: `updates.${index}.vendors` });
+
+    return (
+        <Tabs defaultValue="0" className="border rounded-md p-3 bg-background">
+            <TabsList className="bg-muted overflow-x-auto h-9 w-full justify-start">
+                {fields.map((_, i) => <TabsTrigger key={i} value={`${i}`} className="px-2 text-[10px]">V{i + 1}</TabsTrigger>)}
+            </TabsList>
+            {fields.map((field, vIndex) => (
+                <TabsContent key={field.id} value={`${vIndex}`} className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3">
+                    <FormField
+                        control={form.control}
+                        name={`updates.${index}.vendors.${vIndex}.vendorName`}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-[10px]">Vendor {vIndex + 1}</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Vendor" /></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                        {vendors?.map((v: any, i: number) => <SelectItem key={i} value={v.vendorName}>{v.vendorName}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name={`updates.${index}.vendors.${vIndex}.rate`}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-[10px]">Rate</FormLabel>
+                                <FormControl><Input type="number" {...field} className="h-8 text-xs" /></FormControl>
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name={`updates.${index}.vendors.${vIndex}.paymentTerm`}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-[10px]">Term</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Term" /></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                        {options?.paymentTerms?.map((term: string, i: number) => <SelectItem key={i} value={term}>{term}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </FormItem>
+                        )}
+                    />
+                </TabsContent>
+            ))}
+        </Tabs>
+    );
+};
+
+const VendorUpdateForm = ({ items, vendorType, vendors, options, onSuccess }: any) => {
+    const { indentSheet } = useSheets();
+    const [vendorSearch, setVendorSearch] = useState('');
+
+    const regularSchema = z.object({
+        updates: z.array(z.object({
+            searialNumber: z.union([z.string(), z.number()]),
+            vendorName: z.string().nonempty("Vendor required"),
+            rate: z.coerce.number().gt(0, "Rate must be > 0"),
+            paymentTerm: z.string().nonempty("Payment term required"),
+            product: z.string(),
+            indentNumber: z.string()
+        }))
+    });
+
+    const threePartySchema = z.object({
+        comparisonSheet: z.any().optional(),
+        updates: z.array(z.object({
+            searialNumber: z.union([z.string(), z.number()]),
+            product: z.string(),
+            indentNumber: z.string(),
+            vendors: z.array(z.object({
+                vendorName: z.string().optional(),
+                rate: z.coerce.number().optional(),
+                paymentTerm: z.string().optional(),
+            })).max(10).min(1),
+        }))
+    });
+
+    const isThreeParty = vendorType === 'Three Party';
+    const form = useForm<any>({
+        resolver: zodResolver(isThreeParty ? threePartySchema : regularSchema),
+        defaultValues: {
+            comparisonSheet: undefined,
+            updates: items.map((item: any) => ({
+                searialNumber: item.searialNumber || '',
+                product: item.product,
+                indentNumber: item.indentNo,
+                vendorName: '',
+                rate: undefined,
+                paymentTerm: '',
+                vendors: isThreeParty ? Array.from({ length: 10 }, () => ({ vendorName: '', rate: undefined, paymentTerm: '' })) : []
+            }))
+        }
+    });
+
+    const onSubmit = async (values: any) => {
+        try {
+            let commonUrl = '';
+            if (isThreeParty && values.comparisonSheet) {
+                commonUrl = await uploadFile(values.comparisonSheet, import.meta.env.VITE_COMPARISON_SHEET_FOLDER);
+            }
+
+            const payload = values.updates.map((update: any) => {
+                const now = formatDate(new Date());
+                const originalItem = items.find((i: any) => String(i.searialNumber) === String(update.searialNumber))!;
+                const rowIndex = (originalItem as any).rowIndex || indentSheet.find(s => String(s.searialNumber) === String(update.searialNumber))?.rowIndex;
+
+                if (isThreeParty) {
+                    const partyPayload: any = {
+                        rowIndex,
+                        indentNumber: update.indentNumber,
+                        actual2: now,
+                        comparisonSheet: commonUrl || ''
+                    };
+                    update.vendors.forEach((v: any, i: number) => {
+                        if (v.vendorName) {
+                            partyPayload[`vendorName${i + 1}`] = v.vendorName;
+                            partyPayload[`rate${i + 1}`] = v.rate?.toString() || '';
+                            partyPayload[`paymentTerm${i + 1}`] = v.paymentTerm || '';
+                        }
+                    });
+                    return partyPayload;
+                } else {
+                    return {
+                        rowIndex,
+                        indentNumber: update.indentNumber,
+                        actual2: now,
+                        vendorName1: update.vendorName,
+                        rate1: update.rate.toString(),
+                        paymentTerm1: update.paymentTerm,
+                        approvedVendorName: update.vendorName,
+                        approvedRate: update.rate,
+                        approvedPaymentTerm: update.paymentTerm,
+                    };
+                }
+            });
+
+            await postToSheet(payload, 'update', 'INDENT');
+            toast.success(`Updated ${items.length} items`);
+            onSuccess();
+        } catch (e) {
+            toast.error('Failed to update');
+        }
+    };
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                {isThreeParty && (
+                    <div className="border-b pb-4 mb-4">
+                        <FormField
+                            control={form.control}
+                            name="comparisonSheet"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel className="text-sm font-bold">Comparison Sheet (Entire Indent)</FormLabel>
+                                    <FormControl><Input type="file" onChange={(e) => field.onChange(e.target.files?.[0])} className="h-9" /></FormControl>
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                )}
+
+                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+                    {items.map((item: any, index: number) => (
+                        <div key={item.searialNumber || index} className="border p-4 rounded-md bg-muted/20 space-y-4">
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="font-semibold text-sm text-primary">{item.product}</span>
+                                <span className="text-xs text-muted-foreground bg-primary/5 px-2 py-1 rounded">Qty: {item.quantity} {item.uom} | S.No: {item.searialNumber}</span>
+                            </div>
+
+                            {!isThreeParty ? (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name={`updates.${index}.vendorName`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs">Vendor</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value} onOpenChange={(open) => !open && setVendorSearch("")}>
+                                                    <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="Vendor" /></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        <div className="px-2 py-1">
+                                                            <Input placeholder="Search..." className="h-8" value={vendorSearch} onChange={(e) => setVendorSearch(e.target.value)} />
+                                                        </div>
+                                                        <div className="max-h-[150px] overflow-y-auto">
+                                                            {vendors?.filter((v: any) => v.vendorName.toLowerCase().includes(vendorSearch.toLowerCase())).map((v: any, i: number) => (
+                                                                <SelectItem key={i} value={v.vendorName}>{v.vendorName}</SelectItem>
+                                                            ))}
+                                                        </div>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name={`updates.${index}.rate`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs">Rate</FormLabel>
+                                                <FormControl><Input type="number" {...field} className="h-9" /></FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name={`updates.${index}.paymentTerm`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs">Term</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="Terms" /></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        {options?.paymentTerms?.map((term: string, i: number) => <SelectItem key={i} value={term}>{term}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            ) : (
+                                <ThreePartyFields index={index} form={form} vendors={vendors} options={options} />
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                <Button type="submit" disabled={form.formState.isSubmitting} className="w-full">
+                    {form.formState.isSubmitting ? <Loader size={16} color="white" /> : `Update ${items.length} Items`}
+                </Button>
+            </form>
+        </Form>
+    );
+};
 
 export default () => {
     const { indentSheet, indentLoading, updateIndentSheet, masterSheet: options } = useSheets();
     const { user } = useAuth();
 
-    const [selectedIndent, setSelectedIndent] = useState<VendorUpdateData | null>(null);
-    const [selectedHistory, setSelectedHistory] = useState<HistoryData | null>(null);
-    const [historyData, setHistoryData] = useState<HistoryData[]>([]);
-    const [tableData, setTableData] = useState<VendorUpdateData[]>([]);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [editingRow, setEditingRow] = useState<string | null>(null);
-    const [editValues, setEditValues] = useState<Partial<HistoryData>>({});
-    const [vendorSearch, setVendorSearch] = useState('');
+    const [selectedIndent, setSelectedIndent] = useState<GroupedVendorUpdateData | null>(null);
+    const [selectedHistory, setSelectedHistory] = useState<GroupedHistoryData | null>(null);
+    const [historyData, setHistoryData] = useState<GroupedHistoryData[]>([]);
+    const [tableData, setTableData] = useState<GroupedVendorUpdateData[]>([]);
     const [vendors, setVendors] = useState([]);
     const [vendorsLoading, setVendorsLoading] = useState(true);
+
     useEffect(() => {
         const loadVendors = async () => {
             setVendorsLoading(true);
@@ -78,668 +333,155 @@ export default () => {
         };
         loadVendors();
     }, []);
-    // Fetching table data
+
     useEffect(() => {
-        setTableData(
-            indentSheet
-                .filter((sheet) => sheet.planned2 !== '' && sheet.actual2 === '')
-                .map((sheet) => ({
-                    indentNo: sheet.indentNumber,
-                    indenter: sheet.indenterName,
-                    department: sheet.department,
-                    product: sheet.productName,
-                    quantity: sheet.approvedQuantity,
-                    uom: sheet.uom,
-                    vendorType: sheet.vendorType as VendorUpdateData['vendorType'],
-                    vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
-                    searialNumber: sheet.searialNumber,
-                }))
-                .reverse()
-        );
-        setHistoryData(
-            indentSheet
-                .filter((sheet) => sheet.planned2 !== '' && sheet.actual2 !== '')
-                .map((sheet) => ({
-                    date: formatDate(new Date(sheet.actual2)),
-                    indentNo: sheet.indentNumber,
-                    indenter: sheet.indenterName,
-                    department: sheet.department,
-                    product: sheet.productName,
-                    quantity: sheet.quantity,
-                    uom: sheet.uom,
-                    rate: sheet.approvedRate || 0,
-                    vendorType: sheet.vendorType as HistoryData['vendorType'],
-                    vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
-                    searialNumber: sheet.searialNumber,
-                }))
-                .reverse()
-        );
+        const pendingItems = indentSheet
+            .filter((sheet) => sheet.planned2 !== '' && sheet.actual2 === '')
+            .map((sheet) => ({
+                indentNo: sheet.indentNumber,
+                indenter: sheet.indenterName,
+                department: sheet.department,
+                product: sheet.productName,
+                quantity: sheet.approvedQuantity,
+                uom: sheet.uom,
+                vendorType: sheet.vendorType as VendorUpdateData['vendorType'],
+                vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
+                searialNumber: sheet.searialNumber,
+            }));
+
+        const groupedPending = pendingItems.reduce((acc, item) => {
+            if (!acc[item.indentNo]) {
+                acc[item.indentNo] = {
+                    indentNo: item.indentNo,
+                    indenter: item.indenter,
+                    department: item.department,
+                    vendorType: item.vendorType,
+                    items: [],
+                };
+            }
+            acc[item.indentNo].items.push(item);
+            return acc;
+        }, {} as Record<string, GroupedVendorUpdateData>);
+
+        setTableData(Object.values(groupedPending).reverse());
+
+        const historyItems = indentSheet
+            .filter((sheet) => sheet.planned2 !== '' && sheet.actual2 !== '')
+            .map((sheet) => ({
+                date: formatDate(new Date(sheet.actual2)),
+                indentNo: sheet.indentNumber,
+                indenter: sheet.indenterName,
+                department: sheet.department,
+                product: sheet.productName,
+                quantity: sheet.quantity,
+                uom: sheet.uom,
+                rate: sheet.approvedRate || 0,
+                vendorType: sheet.vendorType as HistoryData['vendorType'],
+                vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
+                searialNumber: sheet.searialNumber,
+            }));
+
+        const groupedHistory = historyItems.reduce((acc, item) => {
+            if (!acc[item.indentNo]) {
+                acc[item.indentNo] = {
+                    indentNo: item.indentNo,
+                    indenter: item.indenter,
+                    department: item.department,
+                    date: item.date,
+                    items: [],
+                };
+            }
+            acc[item.indentNo].items.push(item);
+            return acc;
+        }, {} as Record<string, GroupedHistoryData>);
+
+        setHistoryData(Object.values(groupedHistory).reverse());
     }, [indentSheet]);
 
-
-    const handleEditClick = (row: HistoryData) => {
-        setEditingRow(row.searialNumber || row.indentNo);
-        setEditValues({
-            quantity: row.quantity,
-            uom: row.uom,
-            vendorType: row.vendorType,
-            rate: row.rate,
-            product: row.product,
-            vendorName: row.vendorName,
-        });
-    };
-
-
-    const handleCancelEdit = () => {
-        setEditingRow(null);
-        setEditValues({});
-    };
-
-    const handleSaveEdit = async (identifier: string) => {
-        try {
-            await postToSheet(
-                indentSheet
-                    .filter((s) => String(s.searialNumber) === identifier || s.indentNumber === identifier)
-                    .map((prev) => {
-                        return {
-                            rowIndex: (prev as any).rowIndex,
-                            indentNumber: prev.indentNumber,
-                            quantity: editValues.quantity,
-                            uom: editValues.uom,
-                            vendorType: editValues.vendorType,
-                            rate1: editValues.rate?.toString(),
-                            approvedRate: editValues.rate,
-                            productName: editValues.product,
-                            approvedVendorName: editValues.vendorName,
-                            vendorName1: editValues.vendorName,
-                        };
-                    }),
-                'update'
-            );
-            toast.success(`Updated indent ${identifier}`);
-            updateIndentSheet();
-            setEditingRow(null);
-            setEditValues({});
-        } catch {
-            toast.error('Failed to update indent');
-        }
-    };
-
-
-    const handleInputChange = (field: keyof HistoryData, value: any) => {
-        setEditValues(prev => ({ ...prev, [field]: value }));
-    };
-
-    // Creating table columns
-    const columns: ColumnDef<VendorUpdateData>[] = [
+    const columns: ColumnDef<GroupedVendorUpdateData>[] = [
         ...(user.updateVendorAction
             ? [
                 {
                     header: 'Action',
-                    cell: ({ row }: { row: Row<VendorUpdateData> }) => {
-                        const indent = row.original;
-
-                        return (
-                            <div>
-                                <DialogTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                            setSelectedIndent(indent);
-                                        }}
-                                    >
-                                        Update
-                                    </Button>
-                                </DialogTrigger>
-                            </div>
-                        );
-                    },
+                    cell: ({ row }: { row: Row<GroupedVendorUpdateData> }) => (
+                        <Button
+                            variant="outline"
+                            onClick={() => setSelectedIndent(row.original)}
+                        >
+                            Update ({row.original.items.length})
+                        </Button>
+                    ),
                 },
             ]
             : []),
+        { accessorKey: 'indentNo', header: 'Indent No.' },
+        { accessorKey: 'indenter', header: 'Indenter' },
+        { accessorKey: 'department', header: 'Department' },
         {
-            accessorKey: 'searialNumber',
-            header: 'S.No.',
-            cell: ({ getValue }) => (
-                <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                    {String(getValue() || '-')}
+            accessorKey: 'items',
+            header: 'Products',
+            cell: ({ row }) => (
+                <div className="max-w-[200px] break-words whitespace-normal text-xs">
+                    {row.original.items.map(i => i.product).join(', ')}
                 </div>
             ),
-        },
-        {
-            accessorKey: 'indentNo',
-            header: 'Indent No.',
-        },
-        {
-            accessorKey: 'indenter',
-            header: 'Indenter',
-        },
-        {
-            accessorKey: 'department',
-            header: 'Department',
-        },
-        {
-            accessorKey: 'product',
-            header: 'Product',
-            cell: ({ getValue }) => (
-                <div className="max-w-[150px] break-words whitespace-normal">
-                    {getValue() as string}
-                </div>
-            ),
-        },
-        {
-            accessorKey: 'quantity',
-            header: 'Quantity',
-        },
-        {
-            accessorKey: 'uom',
-            header: 'UOM',
         },
         {
             accessorKey: 'vendorType',
             header: 'Vendor Type',
             cell: ({ row }) => {
-                const status = row.original.vendorType;
-                const variant = status === 'Regular' ? 'primary' : 'secondary';
-                return <Pill variant={variant}>{status}</Pill>;
+                const variant = row.original.vendorType === 'Regular' ? 'primary' : 'secondary';
+                return <Pill variant={variant}>{row.original.vendorType}</Pill>;
             },
         },
     ];
 
-    const historyColumns: ColumnDef<HistoryData>[] = [
+    const historyColumns: ColumnDef<GroupedHistoryData>[] = [
         ...(user.updateVendorAction ? [
             {
                 header: 'Action',
-                cell: ({ row }: { row: Row<HistoryData> }) => {
-                    const indent = row.original;
-
-                    return (
-                        <div>
-                            <DialogTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    disabled={indent.vendorType === "Three Party"}
-                                    onClick={() => {
-                                        setSelectedHistory(indent);
-                                    }}
-                                >
-                                    Update
-                                </Button>
-                            </DialogTrigger>
-                        </div>
-                    );
-                },
+                cell: ({ row }: { row: Row<GroupedHistoryData> }) => (
+                    <Button
+                        variant="outline"
+                        onClick={() => setSelectedHistory(row.original)}
+                    >
+                        View ({row.original.items.length})
+                    </Button>
+                ),
             },
         ] : []),
+        { accessorKey: 'date', header: 'Date' },
+        { accessorKey: 'indentNo', header: 'Indent No.' },
+        { accessorKey: 'indenter', header: 'Indenter' },
+        { accessorKey: 'department', header: 'Department' },
         {
-            accessorKey: 'date',
-            header: 'Date',
-        },
-        {
-            accessorKey: 'searialNumber',
-            header: 'S.No.',
-            cell: ({ getValue }) => (
-                <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                    {String(getValue() || '-')}
+            accessorKey: 'items',
+            header: 'Products',
+            cell: ({ row }) => (
+                <div className="max-w-[200px] break-words whitespace-normal text-xs">
+                    {row.original.items.map(i => i.product).join(', ')}
                 </div>
             ),
         },
-        {
-            accessorKey: 'indentNo',
-            header: 'Indent No.',
-        },
-        {
-            accessorKey: 'indenter',
-            header: 'Indenter',
-        },
-        {
-            accessorKey: 'department',
-            header: 'Department',
-        },
-        {
-            accessorKey: 'product',
-            header: 'Product',
-            cell: ({ row }) => {
-                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
-                return isEditing ? (
-                    <Input
-                        value={editValues.product ?? row.original.product}
-                        onChange={(e) => handleInputChange('product', e.target.value)}
-                        className="w-[150px]"
-                    />
-                ) : (
-                    <div className="max-w-[150px] break-words whitespace-normal flex items-center gap-2">
-                        {row.original.product}
-                        {user.updateVendorAction && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
-        },
-
-        {
-            accessorKey: 'quantity',
-            header: 'Quantity',
-            cell: ({ row }) => {
-                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
-                return isEditing ? (
-                    <Input
-                        type="number"
-                        value={editValues.quantity ?? row.original.quantity}
-                        onChange={(e) => handleInputChange('quantity', Number(e.target.value))}
-                        className="w-20"
-                    />
-                ) : (
-                    <div className="flex items-center gap-2">
-                        {row.original.quantity}
-                        {user.updateVendorAction && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
-        },
-        {
-            accessorKey: "rate",
-            header: "Rate",
-            cell: ({ row }) => {
-                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
-                const rate = row.original.rate;
-                const vendorType = row.original.vendorType;
-
-                if (!rate && vendorType === "Three Party") {
-                    return (
-                        <span className="text-muted-foreground">Not Decided</span>
-                    )
-                }
-
-                return isEditing ? (
-                    <Input
-                        type="number"
-                        value={editValues.rate ?? rate}
-                        onChange={(e) => handleInputChange('rate', Number(e.target.value))}
-                        className="w-20"
-                    />
-                ) : (
-                    <div className="flex items-center gap-2">
-                        &#8377;{rate}
-                        {user.updateVendorAction && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
-        },
-
-        {
-            accessorKey: 'uom',
-            header: 'UOM',
-            cell: ({ row }) => {
-                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
-                return isEditing ? (
-                    <Input
-                        value={editValues.uom ?? row.original.uom}
-                        onChange={(e) => handleInputChange('uom', e.target.value)}
-                        className="w-20"
-                    />
-                ) : (
-                    <div className="flex items-center gap-2">
-                        {row.original.uom}
-                        {user.updateVendorAction && editingRow !== row.original.indentNo && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
-        },
-        {
-            accessorKey: 'vendorName',
-            header: 'Vendor Name',
-            cell: ({ row }) => {
-                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
-                return isEditing ? (
-                    <Input
-                        value={editValues.vendorName ?? row.original.vendorName}
-                        onChange={(e) => handleInputChange('vendorName', e.target.value)}
-                        className="w-[150px]"
-                    />
-                ) : (
-                    <div className="flex items-center gap-2">
-                        {row.original.vendorName}
-                        {user.updateVendorAction && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
-        },
-
-        {
-            accessorKey: 'vendorType',
-            header: 'Vendor Type',
-            cell: ({ row }) => {
-                const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
-                return isEditing ? (
-                    <Select
-                        value={editValues.vendorType ?? row.original.vendorType}
-                        onValueChange={(value) => handleInputChange('vendorType', value)}
-                    >
-                        <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Regular Vendor">Regular</SelectItem>
-                            <SelectItem value="Three Party">Three Party</SelectItem>
-                        </SelectContent>
-                    </Select>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        <Pill
-                            variant={row.original.vendorType === 'Regular' ? 'primary' : 'secondary'}
-                        >
-                            {row.original.vendorType}
-                        </Pill>
-                        {user.updateVendorAction && editingRow !== row.original.indentNo && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
-        },
-        ...(user.updateVendorAction
-            ? [
-                {
-                    id: 'editActions',
-                    cell: ({ row }: { row: Row<HistoryData> }) => {
-                        const isEditing = editingRow === (row.original.searialNumber || row.original.indentNo);
-                        return isEditing ? (
-                            <div className="flex gap-2">
-                                <Button
-                                    size="sm"
-                                    onClick={() => handleSaveEdit(row.original.indentNo)}
-                                >
-                                    Save
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={handleCancelEdit}
-                                >
-                                    Cancel
-                                </Button>
-                            </div>
-                        ) : null;
-                    },
-                },
-            ]
-            : []),
     ];
-
-    // Creating Regular Vendor form
-    const regularSchema = z.object({
-        vendorName: z.string().nonempty(),
-        rate: z.coerce.number().gt(0),
-        paymentTerm: z.string().nonempty(),
-    });
-
-    const regularForm = useForm<z.infer<typeof regularSchema>>({
-        resolver: zodResolver(regularSchema),
-        defaultValues: {
-            vendorName: '',
-            rate: undefined,
-            paymentTerm: '',
-        },
-    });
-
-    // const getCurrentFormattedDate = () => {
-    //     const now = new Date();
-    //     const day = String(now.getDate()).padStart(2, '0');
-    //     const month = String(now.getMonth() + 1).padStart(2, '0');
-    //     const year = now.getFullYear();
-    //     const hours = String(now.getHours()).padStart(2, '0');
-    //     const minutes = String(now.getMinutes()).padStart(2, '0');
-    //     const seconds = String(now.getSeconds()).padStart(2, '0');
-    //     return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-    // };
-
-    const getCurrentFormattedDateOnly = () => {
-        const now = new Date();
-        const day = String(now.getDate()).padStart(2, '0');
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const year = now.getFullYear();
-        return `${day}/${month}/${year}`;
-    };
-
-
-
-    async function onSubmitRegular(values: z.infer<typeof regularSchema>) {
-        try {
-            await postToSheet(
-                indentSheet
-                    .filter((s) => selectedIndent?.searialNumber ? String(s.searialNumber) === String(selectedIndent.searialNumber) : s.indentNumber === selectedIndent?.indentNo)
-                    .map((prev) => {
-                        return {
-                            rowIndex: (prev as any).rowIndex,
-                            indentNumber: prev.indentNumber,
-                            actual2: formatDate(new Date()),
-                            vendorName1: values.vendorName,
-                            rate1: values.rate.toString(),
-                            paymentTerm1: values.paymentTerm,
-                            approvedVendorName: values.vendorName,
-                            approvedRate: values.rate,
-                            approvedPaymentTerm: values.paymentTerm,
-                        };
-                    }),
-                'update'
-            );
-            toast.success(`Updated vendor of ${selectedIndent?.indentNo}`);
-            setOpenDialog(false);
-            regularForm.reset();
-            setTimeout(() => updateIndentSheet(), 1000);
-        } catch {
-            toast.error('Failed to update vendor');
-        }
-    }
-
-
-    // Creating Three Party Vendor form
-    const threePartySchema = z.object({
-        comparisonSheet: z.instanceof(File).optional(),
-        vendors: z.array(
-            z.object({
-                vendorName: z.string().optional().or(z.literal('')),
-                rate: z.coerce.number().optional(),
-                paymentTerm: z.string().optional().or(z.literal('')),
-            })
-        ).max(10).min(1),
-    });
-
-    const threePartyForm = useForm<z.infer<typeof threePartySchema>>({
-        resolver: zodResolver(threePartySchema),
-        defaultValues: {
-            vendors: Array.from({ length: 10 }, () => ({
-                vendorName: '',
-                rate: undefined,
-                paymentTerm: '',
-            })),
-        },
-    });
-
-    const { fields } = useFieldArray({
-        control: threePartyForm.control,
-        name: 'vendors',
-    });
-
-    async function onSubmitThreeParty(values: z.infer<typeof threePartySchema>) {
-        try {
-            let url: string = '';
-            if (values.comparisonSheet) {
-                url = await uploadFile(
-                    values.comparisonSheet,
-                    import.meta.env.VITE_COMPARISON_SHEET_FOLDER
-                );
-            }
-
-            await postToSheet(
-                indentSheet
-                    .filter((s) => selectedIndent?.searialNumber ? String(s.searialNumber) === String(selectedIndent.searialNumber) : s.indentNumber === selectedIndent?.indentNo)
-                    .map((prev) => {
-                        return {
-                            rowIndex: (prev as any).rowIndex,
-                            indentNumber: prev.indentNumber,
-                            actual2: formatDate(new Date()),
-                            vendorName1: values.vendors[0]?.vendorName || '',
-                            rate1: values.vendors[0]?.rate?.toString() || '',
-                            paymentTerm1: values.vendors[0]?.paymentTerm || '',
-                            vendorName2: values.vendors[1]?.vendorName || '',
-                            rate2: values.vendors[1]?.rate?.toString() || '',
-                            paymentTerm2: values.vendors[1]?.paymentTerm || '',
-                            vendorName3: values.vendors[2]?.vendorName || '',
-                            rate3: values.vendors[2]?.rate?.toString() || '',
-                            paymentTerm3: values.vendors[2]?.paymentTerm || '',
-                            vendorName4: values.vendors[3]?.vendorName || '',
-                            rate4: values.vendors[3]?.rate?.toString() || '',
-                            paymentTerm4: values.vendors[3]?.paymentTerm || '',
-                            vendorName5: values.vendors[4]?.vendorName || '',
-                            rate5: values.vendors[4]?.rate?.toString() || '',
-                            paymentTerm5: values.vendors[4]?.paymentTerm || '',
-                            vendorName6: values.vendors[5]?.vendorName || '',
-                            rate6: values.vendors[5]?.rate?.toString() || '',
-                            paymentTerm6: values.vendors[5]?.paymentTerm || '',
-                            vendorName7: values.vendors[6]?.vendorName || '',
-                            rate7: values.vendors[6]?.rate?.toString() || '',
-                            paymentTerm7: values.vendors[6]?.paymentTerm || '',
-                            vendorName8: values.vendors[7]?.vendorName || '',
-                            rate8: values.vendors[7]?.rate?.toString() || '',
-                            paymentTerm8: values.vendors[7]?.paymentTerm || '',
-                            vendorName9: values.vendors[8]?.vendorName || '',
-                            rate9: values.vendors[8]?.rate?.toString() || '',
-                            paymentTerm9: values.vendors[8]?.paymentTerm || '',
-                            vendorName10: values.vendors[9]?.vendorName || '',
-                            rate10: values.vendors[9]?.rate?.toString() || '',
-                            paymentTerm10: values.vendors[9]?.paymentTerm || '',
-                            comparisonSheet: url,
-                        };
-                    }),
-                'update'
-            );
-            toast.success(`Updated vendors of ${selectedIndent?.indentNo}`);
-            setOpenDialog(false);
-            threePartyForm.reset();
-            setTimeout(() => updateIndentSheet(), 1000);
-        } catch {
-            toast.error('Failed to update vendor');
-        }
-    }
-
-
-
-    // History Update form
-    const historyUpdateSchema = z.object({
-        rate: z.coerce.number(),
-    })
-
-    const historyUpdateForm = useForm({
-        resolver: zodResolver(historyUpdateSchema),
-        defaultValues: {
-            rate: 0,
-        },
-    })
-
-    useEffect(() => {
-        if (selectedHistory) {
-            historyUpdateForm.reset({ rate: selectedHistory.rate })
-        }
-    }, [selectedHistory])
-
-    async function onSubmitHistoryUpdate(values: z.infer<typeof historyUpdateSchema>) {
-        try {
-            await postToSheet(
-                indentSheet
-                    .filter((s) => selectedHistory?.searialNumber ? String(s.searialNumber) === String(selectedHistory.searialNumber) : s.indentNumber === selectedHistory?.indentNo)
-                    .map((prev) => {
-                        return {
-                            rowIndex: (prev as any).rowIndex,
-                            indentNumber: prev.indentNumber,
-                            actual2: formatDate(new Date()),
-                            rate1: values.rate.toString(),
-                            approvedRate: values.rate,
-                        };
-                    }),
-                'update'
-            );
-            toast.success(`Updated rate of ${selectedHistory?.indentNo}`);
-            setOpenDialog(false);
-            historyUpdateForm.reset({ rate: undefined });
-            setTimeout(() => updateIndentSheet(), 1000);
-        } catch {
-            toast.error('Failed to update vendor');
-        }
-    }
-    function onError(e: any) {
-        console.log(e);
-        toast.error('Please fill all required fields');
-    }
 
     return (
         <div>
-            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+            <Dialog open={!!(selectedIndent || selectedHistory)} onOpenChange={(open) => {
+                if (!open) {
+                    setSelectedIndent(null);
+                    setSelectedHistory(null);
+                }
+            }}>
                 <Tabs defaultValue="pending">
-                    <Heading
-                        heading="Vendor Rate Update"
-                        subtext="Update vendors for Regular and Three Party indents"
-                        tabs
-                    >
+                    <Heading heading="Vendor Rate Update" subtext="Update vendors for Regular and Three Party indents" tabs>
                         <UserCheck size={50} className="text-primary" />
                     </Heading>
                     <TabsContent value="pending">
                         <DataTable
                             data={tableData}
                             columns={columns}
-                            searchFields={['product', 'department', 'indenter', 'vendorType', 'vendorName']}
+                            searchFields={['indentNo', 'department', 'indenter']}
                             dataLoading={indentLoading}
                         />
                     </TabsContent>
@@ -747,499 +489,78 @@ export default () => {
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['product', 'department', 'indenter', 'vendorType', 'vendorName']}
+                            searchFields={['indentNo', 'department', 'indenter']}
                             dataLoading={indentLoading}
                         />
                     </TabsContent>
-
                 </Tabs>
-                {selectedIndent &&
-                    (selectedIndent.vendorType === 'Three Party' ? (
-                        <DialogContent>
-                            <Form {...threePartyForm}>
-                                <form
-                                    onSubmit={threePartyForm.handleSubmit(
-                                        onSubmitThreeParty,
-                                        onError
-                                    )}
-                                    className="space-y-7"
-                                >
-                                    <DialogHeader className="space-y-1">
-                                        <DialogTitle>Three Party Vendors</DialogTitle>
-                                        <DialogDescription>
-                                            Update vendors for{' '}
-                                            <span className="font-medium">
-                                                {selectedIndent.indentNo}
-                                            </span>
-                                        </DialogDescription>
-                                    </DialogHeader>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 bg-muted py-2 px-5 rounded-md ">
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Indenter</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.indenter}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Department</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.department}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Product</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.product}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">S.No.</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.searialNumber || '-'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Tabs
-                                        defaultValue="0"
-                                        className="grid gap-5 p-4 border rounded-md"
-                                    >
-                                        <div className="overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
-                                            <TabsList className="flex w-max min-w-full p-1 bg-muted rounded-lg h-12">
-                                                {Array.from({ length: 10 }).map((_, i) => (
-                                                    <TabsTrigger
-                                                        key={i}
-                                                        value={`${i}`}
-                                                        className="flex-none w-auto px-4 py-2 text-sm font-medium transition-all"
-                                                    >
-                                                        Vendor {i + 1}
-                                                    </TabsTrigger>
-                                                ))}
-                                            </TabsList>
-                                        </div>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    {selectedIndent && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Update Vendor Rates - {selectedIndent.indentNo}</DialogTitle>
+                                <DialogDescription>
+                                    {selectedIndent.indenter} | {selectedIndent.department} | {selectedIndent.vendorType}
+                                </DialogDescription>
+                            </DialogHeader>
 
-                                        {fields.map((field, index) => (
-                                            <TabsContent value={`${index}`} key={field.id}>
-                                                <div className="grid gap-3">
-                                                    <FormField
-                                                        control={threePartyForm.control}
-                                                        name={`vendors.${index}.vendorName`}
-                                                        render={({ field }) => {
-                                                            const filteredVendors = vendors?.filter(vendor =>
-                                                                vendor.vendorName.toLowerCase().includes(vendorSearch.toLowerCase())
-                                                            );
-
-                                                            return (
-                                                                <FormItem>
-                                                                    <FormLabel>Vendor Name</FormLabel>
-                                                                    <Select
-                                                                        onValueChange={field.onChange}
-                                                                        value={field.value}
-                                                                        onOpenChange={(open) => {
-                                                                            if (!open) setVendorSearch("");
-                                                                        }}
-                                                                    >
-                                                                        <FormControl>
-                                                                            <SelectTrigger className="w-full">
-                                                                                <SelectValue placeholder="Select vendor" />
-                                                                            </SelectTrigger>
-                                                                        </FormControl>
-                                                                        <SelectContent>
-                                                                            <div className="flex items-center border-b px-3 pb-2">
-                                                                                <Input
-                                                                                    placeholder="Search vendors..."
-                                                                                    className="h-8 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                                                    value={vendorSearch}
-                                                                                    onChange={(e) => setVendorSearch(e.target.value)}
-                                                                                    onClick={(e) => e.stopPropagation()}
-                                                                                    onKeyDown={(e) => e.stopPropagation()}
-                                                                                />
-                                                                            </div>
-                                                                            <div className="max-h-[200px] overflow-y-auto">
-                                                                                {vendorsLoading ? (
-                                                                                    <div className="py-6 text-center text-sm text-muted-foreground">
-                                                                                        Loading vendors...
-                                                                                    </div>
-                                                                                ) : filteredVendors?.length > 0 ? (
-                                                                                    filteredVendors.map((vendor, i) => (
-                                                                                        <SelectItem key={i} value={vendor.vendorName}>
-                                                                                            {vendor.vendorName}
-                                                                                        </SelectItem>
-                                                                                    ))
-                                                                                ) : (
-                                                                                    <div className="py-6 text-center text-sm text-muted-foreground">
-                                                                                        No vendors found
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </FormItem>
-                                                            );
-                                                        }}
-                                                    />
-
-                                                    <FormField
-                                                        control={threePartyForm.control}
-                                                        name={`vendors.${index}.rate`}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Rate</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        placeholder="Enter rate"
-                                                                        {...field}
-                                                                    />
-                                                                </FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={threePartyForm.control}
-                                                        name={`vendors.${index}.paymentTerm`}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Payment Term</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        placeholder="Enter payment term"
-                                                                        {...field}
-                                                                    />
-                                                                </FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                </div>
-                                            </TabsContent>
-                                        ))}
-                                    </Tabs>
-                                    <FormField
-                                        control={threePartyForm.control}
-                                        name="comparisonSheet"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Comparison Sheet</FormLabel>
-                                                <FormControl>
-                                                    <Input
-                                                        type="file"
-                                                        onChange={(e) =>
-                                                            field.onChange(e.target.files?.[0])
-                                                        }
-                                                    />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <DialogFooter>
-                                        <DialogClose asChild>
-                                            <Button variant="outline">Close</Button>
-                                        </DialogClose>
-
-                                        <Button
-                                            type="submit"
-                                            disabled={threePartyForm.formState.isSubmitting}
-                                        >
-                                            {threePartyForm.formState.isSubmitting && (
-                                                <Loader
-                                                    size={20}
-                                                    color="white"
-                                                    aria-label="Loading Spinner"
-                                                />
-                                            )}
-                                            Update
-                                        </Button>
-                                    </DialogFooter>
-                                </form>
-                            </Form>
-                        </DialogContent>
-                    ) : (
-                        <DialogContent>
-                            <Form {...regularForm}>
-                                <form
-                                    onSubmit={regularForm.handleSubmit(onSubmitRegular, onError)}
-                                    className="space-y-5"
-                                >
-                                    <DialogHeader className="space-y-1">
-                                        <DialogTitle>Regular Vendor</DialogTitle>
-                                        <DialogDescription>
-                                            Update vendor for{' '}
-                                            <span className="font-medium">
-                                                {selectedIndent.indentNo}
-                                            </span>
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid grid-cols-2 bg-muted p-2 rounded-md gap-2">
-                                        <div className="space-y-1">
-                                            <p className="font-medium text-sm">Indenter</p>
-                                            <p className="text-xs font-light">
-                                                {selectedIndent.indenter}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium text-sm">Department</p>
-                                            <p className="text-xs font-light">
-                                                {selectedIndent.department}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium text-sm">Product</p>
-                                            <p className="text-xs font-light line-clamp-2">
-                                                {selectedIndent.product}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium text-sm">S.No.</p>
-                                            <p className="text-xs font-light">
-                                                {selectedIndent.searialNumber || '-'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="grid gap-3">
-                                        {/* <FormField
-                                            control={regularForm.control}
-                                            name="vendorName"
-                                            render={({ field }) => {
-                                                const filteredVendors = options?.vendors?.filter(vendor =>
-                                                    vendor.vendorName.toLowerCase().includes(vendorSearch.toLowerCase())
-                                                );
-
-                                                return (
-                                                    <FormItem>
-                                                        <FormLabel>Vendor Name</FormLabel>
-                                                        <Select
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                            onOpenChange={(open) => {
-                                                                if (!open) setVendorSearch(""); // Close hone pe search clear karo
-                                                            }}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger className="w-full">
-                                                                    <SelectValue placeholder="Select vendor" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-2">
-                                                                    <Input
-                                                                        placeholder="Search vendors..."
-                                                                        className="h-8 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                                        value={vendorSearch}
-                                                                        onChange={(e) => setVendorSearch(e.target.value)}
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                        onKeyDown={(e) => e.stopPropagation()}
-                                                                    />
-                                                                </div>
-                                                                <div className="max-h-[200px] overflow-y-auto">
-                                                                    {filteredVendors?.map((vendor, i) => (
-                                                                        <SelectItem key={i} value={vendor.vendorName}>
-                                                                            {vendor.vendorName}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                    {filteredVendors?.length === 0 && (
-                                                                        <div className="py-6 text-center text-sm text-muted-foreground">
-                                                                            No vendors found
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                );
-                                            }}
-                                        /> */}
-
-                                        <FormField
-                                            control={regularForm.control}
-                                            name="vendorName"
-                                            render={({ field }) => {
-                                                const filteredVendors = vendors?.filter(vendor =>
-                                                    vendor.vendorName.toLowerCase().includes(vendorSearch.toLowerCase())
-                                                );
-
-                                                return (
-                                                    <FormItem>
-                                                        <FormLabel>Vendor Name</FormLabel>
-                                                        <Select
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                            onOpenChange={(open) => {
-                                                                if (!open) setVendorSearch("");
-                                                            }}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger className="w-full">
-                                                                    <SelectValue placeholder="Select vendor" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-2">
-                                                                    <Input
-                                                                        placeholder="Search vendors..."
-                                                                        className="h-8 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                                        value={vendorSearch}
-                                                                        onChange={(e) => setVendorSearch(e.target.value)}
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                        onKeyDown={(e) => e.stopPropagation()}
-                                                                    />
-                                                                </div>
-                                                                <div className="max-h-[200px] overflow-y-auto">
-                                                                    {vendorsLoading ? (
-                                                                        <div className="py-6 text-center text-sm text-muted-foreground">
-                                                                            Loading vendors...
-                                                                        </div>
-                                                                    ) : filteredVendors?.length > 0 ? (
-                                                                        filteredVendors.map((vendor, i) => (
-                                                                            <SelectItem key={i} value={vendor.vendorName}>
-                                                                                {vendor.vendorName}
-                                                                            </SelectItem>
-                                                                        ))
-                                                                    ) : (
-                                                                        <div className="py-6 text-center text-sm text-muted-foreground">
-                                                                            No vendors found
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                );
-                                            }}
-                                        />
-
-                                        <FormField
-                                            control={regularForm.control}
-                                            name="rate"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Rate</FormLabel>
-                                                    <FormControl>
-                                                        <Input type="number" {...field} />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={regularForm.control}
-                                            name="paymentTerm"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                    >
-                                                        <FormLabel>Payment Term</FormLabel>
-                                                        <FormControl>
-                                                            <SelectTrigger className="w-full">
-                                                                <SelectValue placeholder="Select payment term" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {options?.paymentTerms?.map(
-                                                                (term, i) => (
-                                                                    <SelectItem
-                                                                        key={i}
-                                                                        value={term}
-                                                                    >
-                                                                        {term}
-                                                                    </SelectItem>
-                                                                )
-                                                            )}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
-
-                                    <DialogFooter>
-                                        <DialogClose asChild>
-                                            <Button variant="outline">Close</Button>
-                                        </DialogClose>
-
-                                        <Button
-                                            type="submit"
-                                            disabled={regularForm.formState.isSubmitting}
-                                        >
-                                            {regularForm.formState.isSubmitting && (
-                                                <Loader
-                                                    size={20}
-                                                    color="white"
-                                                    aria-label="Loading Spinner"
-                                                />
-                                            )}
-                                            Update
-                                        </Button>
-                                    </DialogFooter>
-                                </form>
-                            </Form>
-                        </DialogContent>
-                    ))}
-
-                {selectedHistory &&
-                    selectedHistory.vendorType === "Regular" && (
-                        <DialogContent>
-                            <Form {...historyUpdateForm}>
-                                <form onSubmit={historyUpdateForm.handleSubmit(onSubmitHistoryUpdate, onError)} className="space-y-7">
-                                    <DialogHeader className="space-y-1">
-                                        <DialogTitle>Update Rate</DialogTitle>
-                                        <DialogDescription>
-                                            Update rate for{' '}
-                                            <span className="font-medium">
-                                                {selectedHistory.indentNo}
-                                            </span>
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-3">
-                                        <div className="bg-muted p-2 rounded-md grid grid-cols-2 gap-2 text-xs">
-                                            <div className="space-y-1">
-                                                <p className="font-medium text-muted-foreground">Product</p>
-                                                <p className="font-light truncate">{selectedHistory.product}</p>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <p className="font-medium text-muted-foreground">S.No.</p>
-                                                <p className="font-light">{selectedHistory.searialNumber || '-'}</p>
-                                            </div>
-                                        </div>
-                                        <FormField
-                                            control={historyUpdateForm.control}
-                                            name="rate"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Rate</FormLabel>
-                                                    <FormControl>
-                                                        <Input type="number" {...field} />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
-
-                                    <DialogFooter>
-                                        <DialogClose asChild>
-                                            <Button variant="outline">Close</Button>
-                                        </DialogClose>
-
-                                        <Button
-                                            type="submit"
-                                            disabled={historyUpdateForm.formState.isSubmitting}
-                                        >
-                                            {historyUpdateForm.formState.isSubmitting && (
-                                                <Loader
-                                                    size={20}
-                                                    color="white"
-                                                    aria-label="Loading Spinner"
-                                                />
-                                            )}
-                                            Update
-                                        </Button>
-                                    </DialogFooter>
-                                </form>
-                            </Form>
-                        </DialogContent>
+                            <div className="space-y-6 py-4">
+                                <VendorUpdateForm
+                                    items={selectedIndent.items}
+                                    vendorType={selectedIndent.vendorType}
+                                    vendors={vendors}
+                                    options={options}
+                                    onSuccess={() => {
+                                        setSelectedIndent(null);
+                                        setTimeout(() => updateIndentSheet(), 1000);
+                                    }}
+                                />
+                            </div>
+                        </>
                     )}
+
+                    {selectedHistory && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Indent History - {selectedHistory.indentNo}</DialogTitle>
+                                <DialogDescription>
+                                    {selectedHistory.indenter} | {selectedHistory.department} | {selectedHistory.date}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b text-muted-foreground">
+                                            <th className="text-left py-2 font-medium">Product</th>
+                                            <th className="text-left py-2 font-medium">Qty</th>
+                                            <th className="text-left py-2 font-medium">Rate</th>
+                                            <th className="text-left py-2 font-medium">Vendor</th>
+                                            <th className="text-left py-2 font-medium">S.No</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {selectedHistory.items.map((item, idx) => (
+                                            <tr key={idx} className="border-b last:border-0">
+                                                <td className="py-2">{item.product}</td>
+                                                <td className="py-2">{item.quantity} {item.uom}</td>
+                                                <td className="py-2">₹{item.rate}</td>
+                                                <td className="py-2">{item.vendorName}</td>
+                                                <td className="py-2">{item.searialNumber || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Close</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
             </Dialog>
         </div>
-    )
+    );
 };

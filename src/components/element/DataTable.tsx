@@ -87,7 +87,7 @@ export default function DataTable<TData, TValue>({
                     <ScrollArea
                         className={cn('rounded-sm border h-[74dvh] w-full', className)}
                     >
-                        <TableHeader className="sticky top-0 z-10 bg-muted">
+                        <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground">
                             {table.getHeaderGroups().map((headerGroup) => (
                                 <TableRow key={headerGroup.id}>
                                     {headerGroup.headers.map((header) => {

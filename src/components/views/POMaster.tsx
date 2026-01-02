@@ -195,7 +195,7 @@ export default () => {
                         href={row.original.pdf}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline"
+                        className="text-primary hover:text-primary/80 underline"
                     >
                         View PDF
                     </a>

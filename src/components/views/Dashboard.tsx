@@ -102,7 +102,7 @@ export default function UsersTable() {
         setOut({ quantity: totalIssuedQuantity, count: issuedIndentCount });
     }, [startDate, endDate, filteredProducts, filteredVendors, indentSheet, receivedSheet]);
 
-   
+
 
     const chartConfig = {
         quantity: {
@@ -169,14 +169,14 @@ export default function UsersTable() {
                 </div>
 
                 <div className="grid md:grid-cols-4 gap-3">
-                    <Card className="bg-gradient-to-br from-transparent to-blue-500/10">
+                    <Card className="bg-gradient-to-br from-transparent to-primary/10">
                         <CardContent>
-                            <div className="text-blue-500 flex justify-between">
+                            <div className="text-primary flex justify-between">
                                 <p className="font-semibold">Total Indents</p>
                                 <ClipboardList size={18} />
                             </div>
-                            <p className="text-3xl font-bold text-blue-800">{indent.count}</p>
-                            <div className="text-blue-500 flex justify-between">
+                            <p className="text-3xl font-bold text-primary/80">{indent.count}</p>
+                            <div className="text-primary flex justify-between">
                                 <p className="text-sm ">Indented Quantity</p>
                                 <p>{indent.quantity}</p>
                             </div>
@@ -249,10 +249,8 @@ export default function UsersTable() {
                                             x2="1"
                                             y2="0"
                                         >
-                                            <stop offset="100%" stopColor="#3b82f6" />{' '}
-                                            {/* Tailwind blue-500 */}
-                                            <stop offset="0%" stopColor="#2563eb" />{' '}
-                                            {/* Tailwind blue-600 */}
+                                            <stop offset="100%" stopColor="var(--primary)" />
+                                            <stop offset="0%" stopColor="oklch(0.5 0.15 155)" />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid horizontal={false} />

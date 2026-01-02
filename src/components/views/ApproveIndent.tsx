@@ -609,7 +609,7 @@ export default () => {
                         href={attachment}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm underline"
+                        className="text-primary hover:text-primary/80 text-xs sm:text-sm underline"
                     >
                         View
                     </a>
@@ -885,7 +885,7 @@ export default () => {
                 <TabsContent value="pending" className="w-full">
                     <div className="space-y-4">
                         {selectedRows.size > 0 && (
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 sm:p-4 bg-blue-50 rounded-lg gap-2 sm:gap-0">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 sm:p-4 bg-primary/10 rounded-lg gap-2 sm:gap-0 border border-primary/20">
                                 <span className="text-sm font-medium">
                                     {selectedRows.size} row(s) selected for update
                                 </span>

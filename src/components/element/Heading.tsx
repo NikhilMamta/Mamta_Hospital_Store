@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export default ({ children, heading, subtext, tabs = false }: HeaderProps) => {
     return (
-        <div className="bg-gradient-to-br from-blue-100 via-purple-50 to-blue-50 rounded-md">
+        <div className="bg-gradient-to-br from-green-100 via-amber-50 to-green-50 rounded-md">
             <div className="flex justify-between p-5">
                 <div className="flex gap-2 items-center">
                     {children}

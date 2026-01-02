@@ -522,7 +522,7 @@ export default () => {
     }
 
     return (
-        <div className="grid place-items-center w-full bg-gradient-to-br from-blue-100 via-purple-50 to-blue-50 rounder-md">
+        <div className="grid place-items-center w-full bg-gradient-to-br from-green-100 via-amber-50 to-green-50 rounder-md">
             <div className="flex justify-between p-5 w-full">
                 <div className="flex gap-2 items-center">
                     <FilePlus2 size={50} className="text-primary" />
@@ -553,7 +553,7 @@ export default () => {
                         className="flex flex-col items-center"
                     >
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
-                            <div className="flex items-center justify-center gap-4 bg-blue-50 p-4 rounded">
+                            <div className="flex items-center justify-center gap-4 bg-primary/10 p-4 rounded">
                                 <img
                                     src="/00.  Logo HD (1).png"
                                     alt="Company Logo"
@@ -846,7 +846,7 @@ export default () => {
 
                             <div className="grid md:grid-cols-3 gap-3">
                                 <Card className="p-0 gap-0 shadow-xs rounded-[3px]">
-                                    <CardHeader className="bg-muted px-5 py-2">
+                                    <CardHeader className="bg-primary/10 px-5 py-2">
                                         <CardTitle className="text-center">
                                             Our Commercial Details
                                         </CardTitle>
@@ -863,7 +863,7 @@ export default () => {
                                     </CardContent>
                                 </Card>
                                 <Card className="p-0 gap-0 shadow-xs rounded-[3px]">
-                                    <CardHeader className="bg-muted px-5 py-2">
+                                    <CardHeader className="bg-primary/10 px-5 py-2">
                                         <CardTitle className="text-center">
                                             Billing Address
                                         </CardTitle>
@@ -874,7 +874,7 @@ export default () => {
                                     </CardContent>
                                 </Card>
                                 <Card className="p-0 gap-0 shadow-xs rounded-[3px]">
-                                    <CardHeader className="bg-muted px-5 py-2">
+                                    <CardHeader className="bg-primary/10 px-5 py-2">
                                         <CardTitle className="text-center flex items-center justify-between">
                                             Destination Address
                                             <Button
@@ -953,7 +953,7 @@ export default () => {
                             <div className="mx-4 grid">
                                 <div className="rounded-[3px] w-full min-w-full overflow-x-auto">
                                     <Table>
-                                        <TableHeader className="bg-muted">
+                                        <TableHeader className="bg-primary text-primary-foreground font-bold">
                                             <TableRow>
                                                 <TableHead>S.No.</TableHead>
                                                 <TableHead>S/N</TableHead>
@@ -1080,7 +1080,7 @@ export default () => {
                                     </Table>
                                 </div>
                                 <div className="flex justify-end p-4">
-                                    <div className="w-80 rounded-[3px] bg-muted">
+                                    <div className="w-80 rounded-[3px] bg-primary/5">
                                         <p className="flex px-7 py-2 justify-between">
                                             <span>Total:</span>
                                             <span className="text-end">
