@@ -233,6 +233,8 @@ export interface POPdfProps {
     terms: string[];
     preparedBy: string;
     approvedBy: string;
+    indentBy: string;
+    finalApproved: string;
 }
 
 export default ({
@@ -260,6 +262,8 @@ export default ({
     terms,
     preparedBy,
     approvedBy,
+    finalApproved,
+    indentBy,
 }: POPdfProps) => {
     return (
         <Document>
@@ -296,7 +300,7 @@ export default ({
                         </View>
                         <View style={styles.detailsSection}>
                             <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Order No:</Text>
+                                <Text style={styles.detailLabel}>PO No:</Text>
                                 <Text style={styles.detailValue}>{orderNumber}</Text>
                             </View>
                             <View style={styles.detailRow}>
@@ -436,6 +440,10 @@ export default ({
 
                     <View style={styles.signatureContainer}>
                         <View style={styles.signatureSection}>
+                            <Text style={styles.signatureLabel}>Indent By</Text>
+                            <Text>{indentBy}</Text>
+                        </View>
+                        <View style={styles.signatureSection}>
                             <Text style={styles.signatureLabel}>Prepared By</Text>
                             <Text>{preparedBy}</Text>
                         </View>
@@ -443,6 +451,12 @@ export default ({
                             <Text style={styles.signatureLabel}>Approved By</Text>
                             <Text>{approvedBy}</Text>
                         </View>
+                        {finalApproved ? (
+                            <View style={styles.signatureSection}>
+                                <Text style={styles.signatureLabel}>Final Approved By</Text>
+                                <Text>{finalApproved}</Text>
+                            </View>
+                        ) : null}
                         <Text style={styles.companySignature}>For {companyName}</Text>
                     </View>
                 </View>

@@ -126,9 +126,9 @@ export default () => {
     });
 
     useEffect(() => {
-        if (indentType === 'Purchase' && !form.getValues('indentApproveBy')) {
+        if (indentType === 'Purchase') {
             form.setValue('indentApproveBy', 'Dr Sunil Ramnani');
-        } else if (indentType === 'Store Out' && !form.getValues('indentApproveBy')) {
+        } else if (indentType === 'Store Out') {
             form.setValue('indentApproveBy', 'Store Incharge');
         }
     }, [indentType, form]);

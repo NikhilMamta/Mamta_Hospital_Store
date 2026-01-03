@@ -125,8 +125,10 @@ export default () => {
                 })
             ),
         terms: z.array(z.string().nonempty()).max(10),
-        preparedBy: z.string().nonempty(),
-        approvedBy: z.string().nonempty(),
+        indentBy: z.string().optional(),
+        preparedBy: z.string().optional(),
+        approvedBy: z.string().optional(),
+        finalApproved: z.string().optional(),
     });
 
 
@@ -138,8 +140,10 @@ export default () => {
             poDate: new Date(),
             supplierName: '',
             supplierAddress: '',
-            preparedBy: '',
-            approvedBy: '',
+            indentBy: 'Raja Sandekar',
+            preparedBy: 'Nikhil Kumar Urawn',
+            approvedBy: 'Pawan Sahu',
+            finalApproved: 'Dr. Sunil Ramnani',
             gstin: '',
             quotationNumber: '',
             quotationDate: new Date(),
@@ -192,8 +196,10 @@ export default () => {
                 poDate: undefined,
                 supplierName: '',
                 supplierAddress: '',
+                indentBy: '',
                 preparedBy: '',
                 approvedBy: '',
+                finalApproved: '',
                 gstin: '',
                 quotationNumber: '',
                 quotationDate: undefined,
@@ -208,8 +214,10 @@ export default () => {
                 poDate: new Date(),
                 supplierName: '',
                 supplierAddress: '',
-                preparedBy: '',
-                approvedBy: '',
+                indentBy: 'Raja Sandekar',
+                preparedBy: 'Nikhil Kumar Urawn',
+                approvedBy: 'Pawan Sahu',
+                finalApproved: '',
                 gstin: '',
                 quotationNumber: '',
                 quotationDate: new Date(),
@@ -255,6 +263,7 @@ export default () => {
             form.setValue('supplierAddress', vendor?.address || '');
             form.setValue('preparedBy', po.preparedBy);
             form.setValue('approvedBy', po.approvedBy);
+            form.setValue('finalApproved', po.finalApproved || '');
             form.setValue('gstin', vendor?.gstin || '');
             form.setValue('quotationNumber', po.quotationNumber);
             form.setValue('quotationDate', po.quotationDate ? new Date(po.quotationDate) : new Date());
@@ -415,6 +424,8 @@ export default () => {
                 terms: values.terms,
                 preparedBy: values.preparedBy,
                 approvedBy: values.approvedBy,
+                indentBy: values.indentBy,
+                finalApproved: '',
             };
 
             const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
@@ -484,7 +495,7 @@ export default () => {
                     quotationNumber: values.quotationNumber,
                     quotationDate: values.quotationDate ? formatDate(values.quotationDate) : '', // Use formatDate for consistency
                     enquiryNumber: values.ourEnqNo,
-                    enquiryDate: values.enquiryDate ? formatDate(values.enquiryDate) : '', // Use formatDate for consistency
+                    enquiryDate: values.enquiryDate ? formatDate(values.enquiryDate) : '', // Use formatDate for consistency. Column T.
                     term1: values.terms[0],
                     term2: values.terms[1],
                     term3: values.terms[2],
@@ -500,6 +511,8 @@ export default () => {
                     planned: formatDate(new Date()),
                     actual: '',
                     status: '',
+                    indentBy: values.indentBy,
+                    finalApproved: '',
                 };
             });
 
@@ -553,7 +566,7 @@ export default () => {
                         className="flex flex-col items-center"
                     >
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
-                            <div className="flex items-center justify-center gap-4 bg-primary/10 p-4 rounded">
+                            <div className="flex items-center justify-center gap-4 bg-gradient-to-br from-green-100 via-amber-50 to-green-50 rounded py-8">
                                 <img
                                     src="/00.  Logo HD (1).png"
                                     alt="Company Logo"
@@ -1246,6 +1259,22 @@ export default () => {
                             <div className="text-center flex justify-between gap-5 px-7 items-center">
                                 <FormField
                                     control={form.control}
+                                    name="indentBy"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-col justify-center items-center w-full">
+                                            <FormLabel>Indent By</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    className="h-9 w-full text-center"
+                                                    placeholder="Indent By"
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
                                     name="preparedBy"
                                     render={({ field }) => (
                                         <FormItem className="flex flex-col justify-center items-center w-full">
@@ -1276,7 +1305,7 @@ export default () => {
                                         </FormItem>
                                     )}
                                 />
-                                <p className="break-words min-w-1/4">For {details?.companyName}</p>
+                                {/* Final Approved Field Removed from UI */}
                             </div>
                         </div>
 

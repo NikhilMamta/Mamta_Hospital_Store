@@ -165,6 +165,8 @@ export type PoMasterSheet = {
     totalPoAmount: number;
     preparedBy: string;
     approvedBy: string;
+    indentBy?: string;
+    finalApproved?: string;
     pdf: string;
     quotationNumber: string;
     quotationDate: string;

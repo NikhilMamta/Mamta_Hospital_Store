@@ -268,13 +268,13 @@ export default () => {
                             </DialogHeader>
                             <div className="space-y-4 py-4">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-primary/10">
-                                        <tr className="border-b text-primary font-bold text-left">
-                                            <th className="py-2 font-medium">Product</th>
-                                            <th className="py-2 font-medium">Qty</th>
-                                            <th className="py-2 font-medium">Status</th>
-                                            <th className="py-2 font-medium">Date</th>
-                                            <th className="py-2 font-medium">S.No</th>
+                                    <thead className="bg-primary">
+                                        <tr className="border-b text-primary-foreground font-bold text-left">
+                                            <th className="py-2">Product</th>
+                                            <th className="py-2">Qty</th>
+                                            <th className="py-2">Status</th>
+                                            <th className="py-2">Date</th>
+                                            <th className="py-2">S.No</th>
                                         </tr>
                                     </thead>
                                     <tbody>

@@ -29,6 +29,7 @@ import { formatDate } from '@/lib/utils';
 import { Input } from '../ui/input';
 
 interface RateApprovalData {
+    rowIndex: number;
     indentNo: string;
     indenter: string;
     department: string;
@@ -79,6 +80,7 @@ export default () => {
         const pendingItems = indentSheet
             .filter((sheet) => sheet.planned3 !== '' && sheet.actual3 === '' && sheet.vendorType === 'Three Party')
             .map((sheet) => ({
+                rowIndex: (sheet as any).rowIndex,
                 indentNo: sheet.indentNumber,
                 indenter: sheet.indenterName,
                 department: sheet.department,
@@ -242,12 +244,12 @@ export default () => {
                             </DialogHeader>
                             <div className="space-y-4 py-4">
                                 <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b text-muted-foreground text-left">
-                                            <th className="py-2 font-medium">Product</th>
-                                            <th className="py-2 font-medium">Approved Vendor</th>
-                                            <th className="py-2 font-medium">Rate</th>
-                                            <th className="py-2 font-medium">S.No</th>
+                                    <thead className="bg-primary">
+                                        <tr className="border-b text-primary-foreground font-bold text-left">
+                                            <th className="py-2">Product</th>
+                                            <th className="py-2">Approved Vendor</th>
+                                            <th className="py-2">Rate</th>
+                                            <th className="py-2">S.No</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -291,7 +293,7 @@ const RateApprovalForm = ({ items, onSuccess }: { items: RateApprovalData[], onS
                 searialNumber: item.searialNumber || '',
                 vendorIndex: '',
                 product: item.product,
-                indentNumber: item.indentNumber
+                indentNumber: item.indentNo
             }))
         }
     });
@@ -303,7 +305,7 @@ const RateApprovalForm = ({ items, onSuccess }: { items: RateApprovalData[], onS
                 const selectedVendor = originalItem.vendors[parseInt(appr.vendorIndex)];
 
                 return {
-                    rowIndex: (originalItem as any).rowIndex,
+                    rowIndex: originalItem.rowIndex,
                     indentNumber: appr.indentNumber,
                     actual3: formatDate(new Date()),
                     approvedVendorName: selectedVendor[0],
@@ -322,7 +324,10 @@ const RateApprovalForm = ({ items, onSuccess }: { items: RateApprovalData[], onS
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+                console.error("Form errors:", errors);
+                toast.error("Please select a vendor for all items");
+            })} className="space-y-6">
                 <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
                     {items.map((item, index) => (
                         <div key={item.searialNumber || index} className="border p-4 rounded-md bg-muted/20 space-y-4">
@@ -337,17 +342,27 @@ const RateApprovalForm = ({ items, onSuccess }: { items: RateApprovalData[], onS
                                     <FormItem>
                                         <FormLabel className="text-xs font-semibold">Select Vendor</FormLabel>
                                         <FormControl>
-                                            <RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-col gap-3">
                                                 {item.vendors.map((vendor, i) => (
-                                                    <div key={i}>
-                                                        <RadioGroupItem value={`${i}`} id={`v-${item.searialNumber}-${i}`} className="peer sr-only" />
-                                                        <label
-                                                            htmlFor={`v-${item.searialNumber}-${i}`}
-                                                            className="flex flex-col p-3 border rounded-md cursor-pointer hover:bg-accent peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 h-full"
-                                                        >
-                                                            <span className="font-medium text-sm truncate">{vendor[0]}</span>
-                                                            <span className="text-xs text-muted-foreground mt-1">₹{vendor[1]} | {vendor[2]}</span>
-                                                        </label>
+                                                    <div
+                                                        key={i}
+                                                        onClick={() => field.onChange(`${i}`)}
+                                                        className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all ${field.value === `${i}`
+                                                            ? 'border-blue-500 bg-blue-50/50'
+                                                            : 'border-muted/40 hover:border-blue-200 hover:bg-slate-50'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <RadioGroupItem
+                                                                value={`${i}`}
+                                                                id={`v-${item.searialNumber}-${i}`}
+                                                                className="h-5 w-5 border-2 border-muted-foreground/30 text-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-blue-600"
+                                                            />
+                                                            <span className="text-sm font-medium text-foreground/80">
+                                                                Payment Term: {vendor[2]}
+                                                            </span>
+                                                        </div>
+                                                        <span className="font-bold text-base">₹{vendor[1]}</span>
                                                     </div>
                                                 ))}
                                             </RadioGroup>

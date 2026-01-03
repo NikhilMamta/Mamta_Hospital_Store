@@ -133,9 +133,9 @@ const VendorUpdateForm = ({ items, vendorType, vendors, options, onSuccess }: an
     const regularSchema = z.object({
         updates: z.array(z.object({
             searialNumber: z.union([z.string(), z.number()]),
-            vendorName: z.string().nonempty("Vendor required"),
-            rate: z.coerce.number().gt(0, "Rate must be > 0"),
-            paymentTerm: z.string().nonempty("Payment term required"),
+            vendorName: z.string().optional(),
+            rate: z.coerce.number().optional(),
+            paymentTerm: z.string().optional(),
             product: z.string(),
             indentNumber: z.string()
         }))
@@ -325,14 +325,19 @@ export default () => {
     const [vendorsLoading, setVendorsLoading] = useState(true);
 
     useEffect(() => {
-        const loadVendors = async () => {
-            setVendorsLoading(true);
-            const vendorsList = await fetchVendors();
-            setVendors(vendorsList);
+        if (options?.vendors) {
+            setVendors(options.vendors);
             setVendorsLoading(false);
-        };
-        loadVendors();
-    }, []);
+        } else {
+            const loadVendors = async () => {
+                setVendorsLoading(true);
+                const vendorsList = await fetchVendors();
+                setVendors(vendorsList);
+                setVendorsLoading(false);
+            };
+            loadVendors();
+        }
+    }, [options]);
 
     useEffect(() => {
         const pendingItems = indentSheet
@@ -530,13 +535,13 @@ export default () => {
                             </DialogHeader>
                             <div className="space-y-4 py-4">
                                 <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b text-muted-foreground">
-                                            <th className="text-left py-2 font-medium">Product</th>
-                                            <th className="text-left py-2 font-medium">Qty</th>
-                                            <th className="text-left py-2 font-medium">Rate</th>
-                                            <th className="text-left py-2 font-medium">Vendor</th>
-                                            <th className="text-left py-2 font-medium">S.No</th>
+                                    <thead className="bg-primary">
+                                        <tr className="border-b text-primary-foreground font-bold">
+                                            <th className="text-left py-2">Product</th>
+                                            <th className="text-left py-2">Qty</th>
+                                            <th className="text-left py-2">Rate</th>
+                                            <th className="text-left py-2">Vendor</th>
+                                            <th className="text-left py-2">S.No</th>
                                         </tr>
                                     </thead>
                                     <tbody>

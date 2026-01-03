@@ -41,6 +41,8 @@ export interface PoMasterSheet {
     term10: string;
     discountPercent?: number;
     gstPercent?: number;
+    indentBy?: string;
+    finalApproved?: string;
 }
 
 export type UserPermissions = {
@@ -48,7 +50,7 @@ export type UserPermissions = {
     username: string;
     password: string;
     name: string;
-    
+
     administrate: boolean;
     createIndent: boolean;
     allIndent: boolean;
@@ -68,7 +70,7 @@ export type UserPermissions = {
     ordersView: boolean;
     poMaster: boolean;
     getPurchase: boolean;
-    
+
     // New permissions for Dashboard and Inventory
     dashboardView: boolean;
     inventoryView: boolean;

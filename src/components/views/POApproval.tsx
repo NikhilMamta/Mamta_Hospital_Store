@@ -30,6 +30,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { pdf } from '@react-pdf/renderer';
+import POPdf, { type POPdfProps } from '../element/POPdf';
+import { calculateGrandTotal, calculateSubtotal, calculateTotal, calculateTotalGst } from '@/lib/utils';
+import { uploadFile } from '@/lib/fetchers';
 
 interface PoTableData {
     partyName: string;
@@ -63,11 +67,12 @@ interface PoTableData {
     term10: string;
     status: string;
     actual: string;
+    indentBy: string;
     originalRow: any;
 }
 
 export default () => {
-    const { poMasterSheet, updatePoMasterSheet, poMasterLoading } = useSheets();
+    const { poMasterSheet, updatePoMasterSheet, poMasterLoading, masterSheet: details } = useSheets();
     const [openDialog, setOpenDialog] = useState(false);
     const [tableData, setTableData] = useState<PoTableData[]>([]);
     const [historyData, setHistoryData] = useState<PoTableData[]>([]);
@@ -122,6 +127,7 @@ export default () => {
         term10: String(getV(row, 'Term 10', 'term10') || ''),
         status: String(getV(row, 'Status', 'status') || ''),
         actual: String(getV(row, 'Actual', 'actual') || ''),
+        indentBy: String(getV(row, 'Indent By', 'indentBy') || ''),
         originalRow: row
     });
 
@@ -187,17 +193,23 @@ export default () => {
         { accessorKey: 'totalPoAmount', header: 'Total PO Amount' },
         { accessorKey: 'preparedBy', header: 'Prepared By' },
         { accessorKey: 'approvedBy', header: 'Approved By' },
-        { accessorKey: 'pdf', header: 'PDF' },
-        { accessorKey: 'term1', header: 'Term 1' },
-        { accessorKey: 'term2', header: 'Term 2' },
-        { accessorKey: 'term3', header: 'Term 3' },
-        { accessorKey: 'term4', header: 'Term 4' },
-        { accessorKey: 'term5', header: 'Term 5' },
-        { accessorKey: 'term6', header: 'Term 6' },
-        { accessorKey: 'term7', header: 'Term 7' },
-        { accessorKey: 'term8', header: 'Term 8' },
-        { accessorKey: 'term9', header: 'Term 9' },
-        { accessorKey: 'term10', header: 'Term 10' },
+        {
+            accessorKey: 'pdf',
+            header: 'PDF',
+            cell: ({ row }) => {
+                const url = row.original.pdf;
+                return url ? (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 underline hover:text-blue-800 font-medium"
+                    >
+                        View
+                    </a>
+                ) : <span className="text-muted-foreground">-</span>;
+            }
+        },
     ];
 
     const historyColumns: ColumnDef<PoTableData>[] = [
@@ -243,11 +255,110 @@ export default () => {
         const { planned, ...restOfRow } = selectedItem.originalRow;
 
         try {
+            let pdfUrl = selectedItem.pdf;
+
+            // Regenerate PDF if Approved
+            if (values.status === 'Approved') {
+                try {
+                    toast.info("Regenerating PDF with Final Approval...");
+
+                    // Filter all rows for this PO
+                    const poItems = poMasterSheet.filter(p => p.poNumber === selectedItem.poNumber);
+
+                    // Construct PDF Props
+                    const pdfProps: POPdfProps = {
+                        companyName: details?.companyName || '',
+                        companyPhone: details?.companyPhone || '',
+                        companyGstin: details?.companyGstin || '',
+                        companyPan: details?.companyPan || '',
+                        companyAddress: details?.companyAddress || '',
+                        billingAddress: details?.billingAddress || '',
+                        destinationAddress: details?.destinationAddress || '',
+                        supplierName: selectedItem.partyName,
+                        // We might need to fetch supplier address/gstin if not in current row, 
+                        // but CreatePO usually saves them. 
+                        // For now, let's use what we can find or empty if missing 
+                        // (assuming standard fields or fetching from context if needed).
+                        // Looking at CreatePO, it fetches from details.vendors.
+                        // Let's try to match vendor name.
+                        supplierAddress: details?.vendors?.find(v => v.vendorName === selectedItem.partyName)?.address || '',
+                        supplierGstin: details?.vendors?.find(v => v.vendorName === selectedItem.partyName)?.gstin || '',
+
+                        orderNumber: selectedItem.poNumber,
+                        orderDate: formatDate(new Date()), // Use current date of approval or original PO date? User implied "update", so maybe current date or keep original. Let's keep original if we can parse it, else current.
+                        quotationNumber: selectedItem.quotationNumber,
+                        quotationDate: selectedItem.quotationDate,
+                        enqNo: selectedItem.enquiryNumber,
+                        enqDate: selectedItem.enquiryDate,
+                        description: selectedItem.description,
+                        items: poItems.map((item) => ({
+                            internalCode: item.internalCode,
+                            product: item.product,
+                            description: item.description,
+                            quantity: Number(item.quantity) || 0,
+                            unit: item.unit || '',
+                            rate: Number(item.rate) || 0,
+                            gst: Number(item.gst || item.gstPercent) || 0, // Handle column name variations if mapped
+                            discount: Number(item.discount || item.discountPercent) || 0,
+                            amount: Number(item.amount) || 0,
+                        })),
+                        total: calculateSubtotal(poItems.map(item => ({
+                            quantity: Number(item.quantity) || 0,
+                            rate: Number(item.rate) || 0,
+                            discountPercent: Number(item.discount || item.discountPercent) || 0
+                        }))),
+                        gstAmount: calculateTotalGst(poItems.map(item => ({
+                            quantity: Number(item.quantity) || 0,
+                            rate: Number(item.rate) || 0,
+                            discountPercent: Number(item.discount || item.discountPercent) || 0,
+                            gstPercent: Number(item.gst || item.gstPercent) || 0
+                        }))),
+                        grandTotal: calculateGrandTotal(poItems.map(item => ({
+                            quantity: Number(item.quantity) || 0,
+                            rate: Number(item.rate) || 0,
+                            discountPercent: Number(item.discount || item.discountPercent) || 0,
+                            gstPercent: Number(item.gst || item.gstPercent) || 0
+                        }))),
+                        terms: [
+                            selectedItem.term1, selectedItem.term2, selectedItem.term3, selectedItem.term4, selectedItem.term5,
+                            selectedItem.term6, selectedItem.term7, selectedItem.term8, selectedItem.term9, selectedItem.term10
+                        ].filter(Boolean),
+                        preparedBy: selectedItem.preparedBy,
+                        approvedBy: selectedItem.approvedBy,
+                        indentBy: selectedItem.indentBy,
+                        finalApproved: 'Dr. Sunil Ramnani', // Update this field
+                    };
+
+                    const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
+                    const file = new File([blob], `PO-${selectedItem.poNumber}.pdf`, {
+                        type: 'application/pdf',
+                    });
+
+                    // Upload
+                    // We need the email to decide folder? CreatePO uses 'email' param if email exists, else 'upload'.
+                    // We'll just use 'upload' safe mode or check vendor email.
+                    const vendorEmail = details?.vendors?.find(v => v.vendorName === selectedItem.partyName)?.email;
+
+                    pdfUrl = await uploadFile(
+                        file,
+                        import.meta.env.VITE_PURCHASE_ORDERS_FOLDER,
+                        vendorEmail ? 'email' : 'upload',
+                        vendorEmail || ''
+                    );
+
+                } catch (pdfError) {
+                    console.error("PDF Regeneration failed", pdfError);
+                    toast.error("Failed to regenerate PDF, saving status only.");
+                }
+            }
+
             await postToSheet(
                 [{
                     rowIndex: (selectedItem.originalRow as any).rowIndex,
                     actual: formattedDate,           // Column AG
                     status: values.status,           // Column AI
+                    pdf: pdfUrl,                     // Update PDF URL
+                    finalApproved: values.status === 'Approved' ? 'Dr. Sunil Ramnani' : '' // Also update the column text
                 }],
                 'update',
                 'PO MASTER'
@@ -263,7 +374,7 @@ export default () => {
         }
     }
 
-    if (poMasterLoading) return <div className="h-screen w-full grid place-items-center"><Loader color="red" /></div>;
+    // if (poMasterLoading) return <div className="h-screen w-full grid place-items-center"><Loader color="red" /></div>;
 
     return (
         <div className="flex flex-col gap-5 h-full">
