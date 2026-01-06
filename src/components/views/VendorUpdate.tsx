@@ -86,7 +86,15 @@ const ThreePartyFields = ({ index, form, vendors, options }: any) => {
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel className="text-[10px]">Vendor {vIndex + 1}</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
+                                <Select
+                                    onValueChange={(val) => {
+                                        field.onChange(val);
+                                        form.getValues('updates').forEach((_: any, i: number) => {
+                                            form.setValue(`updates.${i}.vendors.${vIndex}.vendorName`, val);
+                                        });
+                                    }}
+                                    value={field.value}
+                                >
                                     <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Vendor" /></SelectTrigger></FormControl>
                                     <SelectContent>
                                         {vendors?.map((v: any, i: number) => <SelectItem key={i} value={v.vendorName}>{v.vendorName}</SelectItem>)}
@@ -111,7 +119,15 @@ const ThreePartyFields = ({ index, form, vendors, options }: any) => {
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel className="text-[10px]">Term</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
+                                <Select
+                                    onValueChange={(val) => {
+                                        field.onChange(val);
+                                        form.getValues('updates').forEach((_: any, i: number) => {
+                                            form.setValue(`updates.${i}.vendors.${vIndex}.paymentTerm`, val);
+                                        });
+                                    }}
+                                    value={field.value}
+                                >
                                     <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Term" /></SelectTrigger></FormControl>
                                     <SelectContent>
                                         {options?.paymentTerms?.map((term: string, i: number) => <SelectItem key={i} value={term}>{term}</SelectItem>)}
@@ -256,7 +272,16 @@ const VendorUpdateForm = ({ items, vendorType, vendors, options, onSuccess }: an
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-xs">Vendor</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value} onOpenChange={(open) => !open && setVendorSearch("")}>
+                                                <Select
+                                                    onValueChange={(val) => {
+                                                        field.onChange(val);
+                                                        form.getValues('updates').forEach((_: any, i: number) => {
+                                                            form.setValue(`updates.${i}.vendorName`, val);
+                                                        });
+                                                    }}
+                                                    value={field.value}
+                                                    onOpenChange={(open) => !open && setVendorSearch("")}
+                                                >
                                                     <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="Vendor" /></SelectTrigger></FormControl>
                                                     <SelectContent>
                                                         <div className="px-2 py-1">
@@ -288,7 +313,15 @@ const VendorUpdateForm = ({ items, vendorType, vendors, options, onSuccess }: an
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-xs">Term</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                <Select
+                                                    onValueChange={(val) => {
+                                                        field.onChange(val);
+                                                        form.getValues('updates').forEach((_: any, i: number) => {
+                                                            form.setValue(`updates.${i}.paymentTerm`, val);
+                                                        });
+                                                    }}
+                                                    value={field.value}
+                                                >
                                                     <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="Terms" /></SelectTrigger></FormControl>
                                                     <SelectContent>
                                                         {options?.paymentTerms?.map((term: string, i: number) => <SelectItem key={i} value={term}>{term}</SelectItem>)}

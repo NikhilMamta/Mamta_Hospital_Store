@@ -922,6 +922,8 @@ interface RecieveItemsData {
     uom: string;
     quantity: number;
     poCopy: string;
+    searialNumber?: string | number;
+    _count?: number; // Add count for grouped items
 }
 
 interface HistoryData {
@@ -958,34 +960,47 @@ export default () => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        setTableData(
-            indentSheet
-                .filter((i) => i.planned5 !== '' && i.actual5 === '')
-                .map((i) => ({
+        const filteredIndents = indentSheet.filter(
+            (i) => i.planned5 !== '' && i.actual5 === ''
+        );
+
+        const grouped = filteredIndents.reduce((acc: { [key: string]: RecieveItemsData }, i) => {
+            const poNumber = i.poNumber;
+            if (!acc[poNumber]) {
+                acc[poNumber] = {
                     indentNumber: i.indentNumber,
                     poNumber: i.poNumber,
                     uom: i.uom,
                     poCopy: i.poCopy,
                     vendor: i.approvedVendorName,
-                    quantity: i.approvedQuantity,
+                    quantity: i.qty || i.approvedQuantity,
                     poDate: i.actual4,
                     product: i.productName,
-                }))
-                .reverse()
-        );
+                    searialNumber: i.searialNumber,
+                    _count: 1
+                };
+            } else {
+                acc[poNumber]._count = (acc[poNumber]._count || 1) + 1;
+            }
+            return acc;
+        }, {});
+
+        setTableData(Object.values(grouped).reverse());
     }, [indentSheet]);
 
     useEffect(() => {
         setHistoryData(
             receivedSheet.map((r) => {
-                const indent = indentSheet.find((i) => i.indentNumber === r.indentNumber);
+                const indent = indentSheet.find((i) =>
+                    r.searialNumber ? String(i.searialNumber) === String(r.searialNumber) : i.indentNumber === r.indentNumber
+                );
                 return {
                     receiveStatus: r.receivedStatus,
                     poNumber: r.poNumber,
                     poDate: formatDate(new Date(r.poDate)),
                     vendor: indent?.approvedVendorName || '',
                     product: indent?.productName || '',
-                    orderQuantity: indent?.approvedQuantity || 0,
+                    orderQuantity: indent?.qty || indent?.approvedQuantity || 0,
                     uom: indent?.uom || '',
                     photoOfProduct: r.photoOfProduct,
                     receivedDate: formatDate(new Date(r.timestamp)),
@@ -1060,10 +1075,39 @@ export default () => {
         },
         { accessorKey: 'poNumber', header: 'PO Number' },
         { accessorKey: 'vendor', header: 'Vendor' },
-        { accessorKey: 'indentNumber', header: 'Indent No.' },
-        { accessorKey: 'product', header: 'Product' },
+        {
+            accessorKey: 'indentNumber',
+            header: 'Indent No.',
+            cell: ({ row }) => {
+                const count = row.original._count || 1;
+                return count > 1 ? (
+                    <span className="text-primary font-medium">Multiple ({count})</span>
+                ) : (
+                    row.original.indentNumber
+                );
+            }
+        },
+        {
+            accessorKey: 'product',
+            header: 'Product',
+            cell: ({ row }) => {
+                const count = row.original._count || 1;
+                return count > 1 ? (
+                    <span className="text-primary font-medium">Multiple Products</span>
+                ) : (
+                    row.original.product
+                );
+            }
+        },
         { accessorKey: 'uom', header: 'UOM' },
-        { accessorKey: 'quantity', header: 'Quantity' },
+        {
+            accessorKey: 'quantity',
+            header: 'Quantity',
+            cell: ({ row }) => {
+                const count = row.original._count || 1;
+                return count > 1 ? "-" : row.original.quantity;
+            }
+        },
         {
             accessorKey: 'poCopy',
             header: 'PO Copy',
@@ -1144,6 +1188,7 @@ export default () => {
                 z.object({
                     indentNumber: z.string(),
                     quantity: z.coerce.number().optional().default(0),
+                    searialNumber: z.union([z.string(), z.number()]).optional(),
                 })
             ),
             billReceived: z.enum(['Received', 'Not Received']).optional(),
@@ -1186,17 +1231,33 @@ export default () => {
     const billReceived = form.watch('billReceived');
 
     // Updated useEffect for matching indents
+    // Updated useEffect for matching indents
     useEffect(() => {
         if (selectedIndent) {
-            const matching = tableData.filter(
-                (item) => item.poNumber === selectedIndent.poNumber
-            );
+            // Filter from indentSheet to get ALL products in the PO that are pending
+            const matching: RecieveItemsData[] = indentSheet
+                .filter(
+                    (i) => i.poNumber === selectedIndent.poNumber && i.planned5 !== '' && i.actual5 === ''
+                )
+                .map((i) => ({
+                    indentNumber: i.indentNumber,
+                    poNumber: i.poNumber,
+                    uom: i.uom,
+                    poCopy: i.poCopy,
+                    vendor: i.approvedVendorName,
+                    quantity: i.qty || i.approvedQuantity,
+                    poDate: i.actual4,
+                    product: i.productName,
+                    searialNumber: i.searialNumber,
+                }));
+
             setMatchingIndents(matching);
 
             // Initialize items array in form
             const initialItems = matching.map((indent) => ({
                 indentNumber: indent.indentNumber,
                 quantity: indent.quantity,
+                searialNumber: indent.searialNumber,
             }));
             form.setValue('items', initialItems as any);
         } else if (!openDialog) {
@@ -1223,20 +1284,25 @@ export default () => {
                 );
             }
 
-            const rows: Partial<ReceivedSheet>[] = values.items.map((item) => ({
-                timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-
-                indentNumber: item.indentNumber,
-                poDate: selectedIndent?.poDate,
-                poNumber: selectedIndent?.poNumber,
-                vendor: selectedIndent?.vendor,
-                receivedStatus: values.status,
-                receivedQuantity: item.quantity,
-                uom: matchingIndents.find(i => i.indentNumber === item.indentNumber)?.uom,
-                billStatus: values.billReceived,
-                billAmount: values.billAmount,
-                photoOfBill: billPhotoUrl,
-            }));
+            const rows: Partial<ReceivedSheet>[] = values.items.map((item) => {
+                const match = matchingIndents.find(i =>
+                    i.searialNumber ? String(i.searialNumber) === String(item.searialNumber) : i.indentNumber === item.indentNumber
+                );
+                return {
+                    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+                    indentNumber: item.indentNumber,
+                    poDate: selectedIndent?.poDate,
+                    poNumber: selectedIndent?.poNumber,
+                    vendor: selectedIndent?.vendor,
+                    receivedStatus: values.status,
+                    receivedQuantity: item.quantity,
+                    uom: match?.uom,
+                    billStatus: values.billReceived,
+                    billAmount: values.billAmount,
+                    photoOfBill: billPhotoUrl,
+                    searialNumber: item.searialNumber,
+                };
+            });
 
 
             // Insert in RECEIVED sheet
@@ -1245,7 +1311,7 @@ export default () => {
             // Update each indent
             for (const item of values.items) {
                 const indentToUpdate = indentSheet.find(
-                    (s) => s.indentNumber === item.indentNumber
+                    (s) => s.searialNumber ? String(s.searialNumber) === String(item.searialNumber) : s.indentNumber === item.indentNumber
                 );
 
                 if (indentToUpdate) {
@@ -1463,16 +1529,16 @@ export default () => {
                                     <table className="w-full">
                                         <thead className="bg-muted">
                                             <tr>
-                                                <th className="p-2 text-left text-sm font-medium">Indent Number</th>
-                                                <th className="p-2 text-left text-sm font-medium">Item Name</th>
-                                                <th className="p-2 text-left text-sm font-medium">Ordered Qty</th>
-                                                <th className="p-2 text-left text-sm font-medium">UOM</th>
-                                                <th className="p-2 text-left text-sm font-medium">Received Qty</th>
+                                                <th className="p-2 text-left text-sm font-medium text-foreground">Indent Number</th>
+                                                <th className="p-2 text-left text-sm font-medium text-foreground">Item Name</th>
+                                                <th className="p-2 text-left text-sm font-medium text-foreground">Ordered Qty</th>
+                                                <th className="p-2 text-left text-sm font-medium text-foreground">UOM</th>
+                                                <th className="p-2 text-left text-sm font-medium text-foreground">Received Qty</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {matchingIndents.map((indent, index) => (
-                                                <tr key={indent.indentNumber} className="border-t">
+                                                <tr key={indent.searialNumber ? String(indent.searialNumber) : indent.indentNumber} className="border-t">
                                                     <td className="p-2 text-sm">{indent.indentNumber}</td>
                                                     <td className="p-2 text-sm">{indent.product}</td>
                                                     <td className="p-2 text-sm">{indent.quantity}</td>

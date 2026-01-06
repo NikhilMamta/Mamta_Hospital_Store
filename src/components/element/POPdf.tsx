@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
     page: {
@@ -12,13 +12,22 @@ const styles = StyleSheet.create({
         paddingBottom: '10px',
     },
     header: {
+        flexDirection: 'row',
         textAlign: 'center',
-        gap: '2',
+        gap: '10',
         justifyContent: 'center',
         alignItems: 'center',
-        fontWeight: 'bold',
         backgroundColor: "#cfe2f3",
         paddingVertical: "12px",
+    },
+    logo: {
+        width: 50,
+        height: 50,
+        objectFit: 'contain',
+    },
+    headerContent: {
+        alignItems: 'center',
+        gap: 2,
     },
     companyName: {
         fontSize: '1.2rem',
@@ -209,6 +218,7 @@ interface Item {
 }
 
 export interface POPdfProps {
+    companyLogo?: string;
     companyName: string;
     companyPhone: string;
     companyGstin: string;
@@ -238,6 +248,7 @@ export interface POPdfProps {
 }
 
 export default ({
+    companyLogo,
     companyName,
     companyPhone,
     companyGstin,
@@ -271,9 +282,12 @@ export default ({
                 <View style={styles.mainContainer}>
                     <View>
                         <View style={styles.header}>
-                            <Text style={styles.companyName}>{companyName}</Text>
-                            <Text>{companyAddress}</Text>
-                            <Text>Phone: +{companyPhone}</Text>
+                            {companyLogo && <Image src={companyLogo} style={styles.logo} />}
+                            <View style={styles.headerContent}>
+                                <Text style={styles.companyName}>{companyName}</Text>
+                                <Text>{companyAddress}</Text>
+                                <Text>Phone: +{companyPhone}</Text>
+                            </View>
                         </View>
 
                         <View style={styles.divider} />
@@ -457,7 +471,6 @@ export default ({
                                 <Text>{finalApproved}</Text>
                             </View>
                         ) : null}
-                        <Text style={styles.companySignature}>For {companyName}</Text>
                     </View>
                 </View>
             </Page>

@@ -325,6 +325,12 @@ const StoreOutStatusForm = ({ items, onSuccess }: { items: StoreOutTableData[], 
         }
     });
 
+    const handleCommonStatusChange = (status: string) => {
+        items.forEach((_, index) => {
+            form.setValue(`updates.${index}.status`, status);
+        });
+    };
+
     const onSubmit = async (values: z.infer<typeof schema>) => {
         const now = new Date();
         const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
@@ -335,9 +341,8 @@ const StoreOutStatusForm = ({ items, onSuccess }: { items: StoreOutTableData[], 
                 return {
                     rowIndex: originalItem.originalRow.rowIndex,
                     issueNo: originalItem.issueNo,
-                    searialNumber: update.searialNumber,
-                    actual1: formattedDate,
-                    status1: update.status, // Targeted update for Column AA
+                    actual1: formattedDate,          // Column Y
+                    status1: update.status,          // Column AA
                 };
             });
 
@@ -380,8 +385,14 @@ const StoreOutStatusForm = ({ items, onSuccess }: { items: StoreOutTableData[], 
                                 name={`updates.${index}.status`}
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-xs">Status</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormLabel className="text-xs">Status (Applying to all will sync)</FormLabel>
+                                        <Select
+                                            onValueChange={(val) => {
+                                                field.onChange(val);
+                                                handleCommonStatusChange(val);
+                                            }}
+                                            value={field.value}
+                                        >
                                             <FormControl>
                                                 <SelectTrigger className="h-9">
                                                     <SelectValue placeholder="Select status" />

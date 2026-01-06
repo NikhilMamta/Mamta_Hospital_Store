@@ -346,13 +346,11 @@ const StoreOutApprovalForm = ({ items, onSuccess }: { items: StoreOutTableData[]
 
         try {
             const payload = values.approvals.map(appr => {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { searialNumber, planned, ...rest } = appr.originalRow;
                 return {
-                    ...rest,
-                    actual: formattedDate,
-                    status: appr.status,
-                    approveQty: appr.approveQty,
+                    rowIndex: appr.originalRow.rowIndex,
+                    actual: formattedDate,          // Column S
+                    status: appr.status,           // Column U
+                    approveQty: appr.approveQty,   // Column V
                 };
             });
 
@@ -362,6 +360,12 @@ const StoreOutApprovalForm = ({ items, onSuccess }: { items: StoreOutTableData[]
         } catch (e) {
             toast.error('Failed to update');
         }
+    };
+
+    const handleCommonStatusChange = (status: string) => {
+        items.forEach((_, index) => {
+            form.setValue(`approvals.${index}.status`, status);
+        });
     };
 
     return (
@@ -380,8 +384,14 @@ const StoreOutApprovalForm = ({ items, onSuccess }: { items: StoreOutTableData[]
                                     name={`approvals.${index}.status`}
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-xs">Status</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
+                                            <FormLabel className="text-xs">Status (Applying to all will sync)</FormLabel>
+                                            <Select
+                                                onValueChange={(val) => {
+                                                    field.onChange(val);
+                                                    handleCommonStatusChange(val);
+                                                }}
+                                                value={field.value}
+                                            >
                                                 <FormControl>
                                                     <SelectTrigger className="h-8">
                                                         <SelectValue placeholder="Status" />

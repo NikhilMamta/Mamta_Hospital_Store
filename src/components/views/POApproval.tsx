@@ -139,23 +139,26 @@ export default () => {
             return Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '');
         });
 
+        // Map all valid rows first
+        const allMapped = validRows.map(mapRowToTableData);
+
         // Pending: Actual date is empty
-        const pending = validRows
-            .filter((row) => {
-                const actualValue = getV(row, 'Actual', 'actual');
-                return !actualValue || String(actualValue).trim() === '';
-            })
-            .map(mapRowToTableData);
+        const pending = allMapped.filter(item => !item.actual || item.actual.trim() === '');
 
         // History: Actual date is NOT empty
-        const history = validRows
-            .filter((row) => {
-                const actualValue = getV(row, 'Actual', 'actual');
-                return actualValue && String(actualValue).trim() !== '';
-            })
-            .map(mapRowToTableData);
+        const history = allMapped.filter(item => item.actual && item.actual.trim() !== '');
 
-        setTableData(pending);
+        // Grouping logic for pending (for display)
+        const groupedPending: PoTableData[] = [];
+        const seenPending = new Set<string>();
+        pending.forEach(item => {
+            if (!seenPending.has(item.poNumber)) {
+                seenPending.add(item.poNumber);
+                groupedPending.push(item);
+            }
+        });
+
+        setTableData(groupedPending);
         setHistoryData(history);
     }, [poMasterSheet]);
 
@@ -250,9 +253,6 @@ export default () => {
 
         // Format date as DD/MM/YYYY HH:mm:ss
         const formattedDate = formatDate(new Date());
-
-        // Exclude 'planned' from payload if needed, similar to StoreOut logic but for PO Master
-        const { planned, ...restOfRow } = selectedItem.originalRow;
 
         try {
             let pdfUrl = selectedItem.pdf;
@@ -352,17 +352,18 @@ export default () => {
                 }
             }
 
-            await postToSheet(
-                [{
-                    rowIndex: (selectedItem.originalRow as any).rowIndex,
-                    actual: formattedDate,           // Column AG
-                    status: values.status,           // Column AI
-                    pdf: pdfUrl,                     // Update PDF URL
-                    finalApproved: values.status === 'Approved' ? 'Dr. Sunil Ramnani' : '' // Also update the column text
-                }],
-                'update',
-                'PO MASTER'
-            );
+            // NEW: Get all items for this PO to update
+            const poItemsToUpdate = poMasterSheet.filter(p => p.poNumber === selectedItem.poNumber);
+
+            const updates = poItemsToUpdate.map(item => ({
+                ...item,
+                actual: formattedDate,           // Column AG
+                status: values.status,           // Column AI
+                pdf: pdfUrl,                     // Update PDF URL
+                finalApproved: values.status === 'Approved' ? 'Dr. Sunil Ramnani' : ''
+            }));
+
+            await postToSheet(updates, 'update', 'PO MASTER');
 
             toast.success('Submitted successfully');
             setOpenDialog(false);
@@ -417,17 +418,28 @@ export default () => {
                                     {selectedItem.poNumber}
                                 </div>
                             </div>
-                            <div className="col-span-2 grid grid-cols-2 gap-4 border-b pb-4">
-                                <div>
-                                    <span className="font-semibold block text-xs text-muted-foreground">Product</span>
-                                    {selectedItem.product}
-                                </div>
-                                <div>
-                                    <span className="font-semibold block text-xs text-muted-foreground">Quantity</span>
-                                    {selectedItem.quantity} {selectedItem.unit}
-                                </div>
+                            <div className="col-span-2 border-b pb-4 max-h-[200px] overflow-y-auto">
+                                <span className="font-semibold block text-xs text-muted-foreground mb-2">Items in this PO</span>
+                                <table className="w-full text-xs border-collapse">
+                                    <thead>
+                                        <tr className="bg-muted">
+                                            <th className="border p-1 text-left">Product</th>
+                                            <th className="border p-1 text-right">Qty</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {poMasterSheet
+                                            .filter(p => p.poNumber === selectedItem.poNumber)
+                                            .map((item, idx) => (
+                                                <tr key={idx}>
+                                                    <td className="border p-1 font-medium">{item.product}</td>
+                                                    <td className="border p-1 text-right">{item.quantity} {item.unit}</td>
+                                                </tr>
+                                            ))}
+                                    </tbody>
+                                </table>
                             </div>
-                            <div className="col-span-2 border-b pb-4">
+                            <div className="col-span-2 border-b pb-4 mt-2">
                                 <span className="font-semibold block text-xs text-muted-foreground">Total PO Amount</span>
                                 <span className="text-lg font-bold text-primary">{selectedItem.totalPoAmount}</span>
                             </div>

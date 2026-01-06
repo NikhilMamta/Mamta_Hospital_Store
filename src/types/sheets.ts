@@ -127,6 +127,7 @@ export type ReceivedSheet = {
     anyTransportations: string;
     transporterName: string;
     transportingAmount: number;
+    searialNumber?: string | number;
 };
 
 export type InventorySheet = {

@@ -33,7 +33,7 @@ function generatePoNumber(poNumbers: string[], today = new Date()): string {
     const fyStart = today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
     const fy = `${(fyStart % 100).toString().padStart(2, '0')}-${((fyStart + 1) % 100).toString().padStart(2, '0')}`;
 
-    const prefix = `JJSPL/STORES/${fy}/`;
+    const prefix = `MSH/STORES/${fy}/`;
 
     // Step 2: Extract numbers for curre nt financial year
     const numbersInFY = poNumbers
@@ -110,6 +110,7 @@ export default () => {
         supplierName: z.string().nonempty(),
         supplierAddress: z.string().nonempty(),
         gstin: z.string().nonempty(),
+        indentNumber: z.string().optional(),
         quotationNumber: z.string().optional().default(''),
         quotationDate: z.coerce.date().optional(),
         ourEnqNo: z.string().optional().default(''),
@@ -145,6 +146,7 @@ export default () => {
             approvedBy: 'Pawan Sahu',
             finalApproved: 'Dr. Sunil Ramnani',
             gstin: '',
+            indentNumber: '',
             quotationNumber: '',
             quotationDate: new Date(),
             ourEnqNo: '',
@@ -161,6 +163,7 @@ export default () => {
     }, [details]);
 
     const indents = form.watch('indents');
+    const indentNumber = form.watch('indentNumber');
     const vendor = form.watch('supplierName');
     const poDate = form.watch('poDate');
     const poNumber = form.watch('poNumber');
@@ -231,16 +234,38 @@ export default () => {
 
     useEffect(() => {
         if (vendor && mode === 'create') {
+            const vendorDetails = details?.vendors.find((v) => v.vendorName === vendor);
+            form.setValue('supplierAddress', vendorDetails?.address || '');
+            form.setValue('gstin', vendorDetails?.gstin || '');
+        }
+    }, [vendor, details]);
+
+    useEffect(() => {
+        if (indentNumber && mode === 'create') {
+            const items = indentSheet.filter(
+                (i) => i.planned4 !== '' && i.actual4 === '' && i.indentNumber === indentNumber
+            );
+            if (items.length > 0) {
+                const firstItem = items[0];
+                form.setValue('supplierName', firstItem.approvedVendorName);
+
+                form.setValue(
+                    'indents',
+                    items.map((i) => ({
+                        indentNumber: i.indentNumber,
+                        gst: 18,
+                        discount: 0,
+                        searialNumber: i.searialNumber,
+                    }))
+                );
+            }
+        }
+    }, [indentNumber]);
+
+    useEffect(() => {
+        if (vendor && mode === 'create' && !indentNumber) {
             const items = indentSheet.filter(
                 (i) => i.planned4 !== '' && i.actual4 === '' && i.approvedVendorName === vendor
-            );
-            form.setValue(
-                'supplierAddress',
-                details?.vendors.find((v) => v.vendorName === vendor)?.address || ''
-            );
-            form.setValue(
-                'gstin',
-                details?.vendors.find((v) => v.vendorName === vendor)?.gstin || ''
             );
             form.setValue(
                 'indents',
@@ -252,7 +277,8 @@ export default () => {
                 }))
             );
         }
-    }, [vendor]);
+    }, [vendor, indentNumber]);
+
 
     useEffect(() => {
         const po = poMasterSheet.find((p) => p.poNumber === poNumber)!;
@@ -342,16 +368,21 @@ export default () => {
             );
 
             // Convert logo image to base64 for PDF
-            const logoResponse = await fetch('/logo.png');
-            const logoBlob = await logoResponse.blob();
-            const logoBase64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(logoBlob);
-            });
+            let logoBase64 = '';
+            try {
+                const logoResponse = await fetch('/00.  Logo HD (1).png');
+                const logoBlob = await logoResponse.blob();
+                logoBase64 = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(logoBlob);
+                });
+            } catch (err) {
+                console.error("Logo fetch error:", err);
+            }
 
             const pdfProps: POPdfProps = {
-                // companyLogo: logoBase64,
+                companyLogo: logoBase64,
                 companyName: details?.companyName || '',
                 companyPhone: details?.companyPhone || '',
                 companyGstin: details?.companyGstin || '',
@@ -666,8 +697,62 @@ export default () => {
                                         )}
                                     />
                                 </div>
-
-                                <div className="grid grid-cols-3 gap-x-5">
+                                <div className="grid grid-cols-2 gap-x-5">
+                                    <FormField
+                                        control={form.control}
+                                        name="indentNumber"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                {mode === 'create' ? (
+                                                    <FormControl>
+                                                        <Select
+                                                            onValueChange={field.onChange}
+                                                            value={field.value}
+                                                        >
+                                                            <FormLabel>Indent Number</FormLabel>
+                                                            <FormControl>
+                                                                <SelectTrigger
+                                                                    size="sm"
+                                                                    className="w-full"
+                                                                >
+                                                                    <SelectValue placeholder="Select Indent Number" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {[
+                                                                    ...new Set(
+                                                                        indentSheet
+                                                                            .filter(
+                                                                                (i) =>
+                                                                                    i.planned4 !== '' &&
+                                                                                    i.actual4 === ''
+                                                                            )
+                                                                            .map((i) => i.indentNumber)
+                                                                    )
+                                                                ].map((indentNo, k) => (
+                                                                    <SelectItem key={k} value={indentNo}>
+                                                                        {indentNo}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormControl>
+                                                ) : (
+                                                    <>
+                                                        <FormLabel>Indent Number</FormLabel>
+                                                        <FormControl>
+                                                            <Input
+                                                                className="h-9"
+                                                                readOnly
+                                                                placeholder="Indent Number"
+                                                                {...field}
+                                                            />
+                                                        </FormControl>
+                                                    </>
+                                                )}
+                                            </FormItem>
+                                        )}
+                                    />
                                     <FormField
                                         control={form.control}
                                         name="supplierName"
@@ -724,6 +809,9 @@ export default () => {
                                             </FormItem>
                                         )}
                                     />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-x-5">
                                     <FormField
                                         control={form.control}
                                         name="supplierAddress"
@@ -1023,21 +1111,14 @@ export default () => {
                                                                 name={`indents.${index}.gst`}
                                                                 render={({ field: indentField }) => (
                                                                     <FormItem>
-                                                                        <Select
-                                                                            onValueChange={(value) => indentField.onChange(Number(value))}
-                                                                            value={indentField.value?.toString()}
-                                                                        >
-                                                                            <FormControl>
-                                                                                <SelectTrigger className="h-9 w-20">
-                                                                                    <SelectValue placeholder="GST%" />
-                                                                                </SelectTrigger>
-                                                                            </FormControl>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="18">18%</SelectItem>
-                                                                                <SelectItem value="5">5%</SelectItem>
-                                                                                <SelectItem value="0">0%</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                type="number"
+                                                                                className="rounded-sm h-9 w-20 p-0 text-center"
+                                                                                {...indentField}
+                                                                                onChange={(e) => indentField.onChange(Number(e.target.value))}
+                                                                            />
+                                                                        </FormControl>
                                                                     </FormItem>
                                                                 )}
                                                             />

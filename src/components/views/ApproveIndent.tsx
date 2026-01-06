@@ -132,35 +132,51 @@ export default () => {
     };
 
     const handleRowSelect = (rowIndex: number, checked: boolean) => {
-        const id = String(rowIndex);
-        setSelectedRows(prev => {
-            const newSet = new Set(prev);
-            if (checked) {
-                newSet.add(id);
-                // Initialize with default values when selected
-                const currentRow = tableData.find(row => row.rowIndex === rowIndex);
-                if (currentRow) {
-                    setBulkUpdates(prevUpdates => {
-                        const newUpdates = new Map(prevUpdates);
-                        newUpdates.set(id, {
-                            vendorType: currentRow.vendorType,
-                            quantity: currentRow.quantity
-                        });
-                        return newUpdates;
-                    });
-                }
-            } else {
-                newSet.delete(id);
-                // Remove from bulk updates when unchecked
-                setBulkUpdates(prevUpdates => {
-                    const newUpdates = new Map(prevUpdates);
-                    newUpdates.delete(id);
-                    return newUpdates;
+        const currentRow = tableData.find(row => row.rowIndex === rowIndex);
+        const targetIndentNo = currentRow?.indentNo;
+
+        if (targetIndentNo) {
+            const rowsToSync = tableData.filter(row => row.indentNo === targetIndentNo);
+            const rowIdsToSync = rowsToSync.map(row => String(row.rowIndex));
+
+            setSelectedRows(prev => {
+                const newSet = new Set(prev);
+                rowIdsToSync.forEach(id => {
+                    if (checked) newSet.add(id);
+                    else newSet.delete(id);
                 });
-            }
-            return newSet;
-        });
+                return newSet;
+            });
+
+            setBulkUpdates(prevUpdates => {
+                const newUpdates = new Map(prevUpdates);
+                rowIdsToSync.forEach(id => {
+                    if (checked) {
+                        const rowToSync = rowsToSync.find(r => String(r.rowIndex) === id);
+                        if (rowToSync) {
+                            newUpdates.set(id, {
+                                vendorType: rowToSync.vendorType,
+                                quantity: rowToSync.quantity
+                            });
+                        }
+                    } else {
+                        newUpdates.delete(id);
+                    }
+                });
+                return newUpdates;
+            });
+        } else {
+            // Fallback for unexpected case where indentNo is missing
+            const id = String(rowIndex);
+            setSelectedRows(prev => {
+                const newSet = new Set(prev);
+                if (checked) newSet.add(id);
+                else newSet.delete(id);
+                return newSet;
+            });
+        }
     };
+
 
     // Add this function to handle select all
     const handleSelectAll = (checked: boolean) => {
@@ -190,13 +206,22 @@ export default () => {
             const newUpdates = new Map(prevUpdates);
 
             if (field === 'vendorType') {
-                // value is string here
                 const vendorValue = value as string;
-                const currentUpdate = newUpdates.get(identifier) || {};
-                newUpdates.set(identifier, {
-                    ...currentUpdate,
-                    vendorType: vendorValue,
-                });
+                const currentRow = tableData.find(r => String(r.rowIndex) === identifier);
+                const targetIndentNo = currentRow?.indentNo;
+
+                if (targetIndentNo) {
+                    tableData.forEach(row => {
+                        if (row.indentNo === targetIndentNo) {
+                            const rowId = String(row.rowIndex);
+                            const currentUpdate = newUpdates.get(rowId) || {};
+                            newUpdates.set(rowId, {
+                                ...currentUpdate,
+                                vendorType: vendorValue,
+                            });
+                        }
+                    });
+                }
             } else {
                 // value is number here
                 const qtyValue = value as number;
@@ -210,6 +235,7 @@ export default () => {
             return newUpdates;
         });
     };
+
 
 
     const handleSubmitBulkUpdates = async () => {

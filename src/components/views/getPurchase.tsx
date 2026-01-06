@@ -30,6 +30,14 @@ import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { formatDate } from '@/lib/utils';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "../ui/table";
 
 import { useCallback } from 'react';
 
@@ -63,6 +71,7 @@ interface GetPurchaseData {
     uom: string;
     poNumber: string;
     approvedRate: number;
+    searialNumber?: string | number;
 }
 
 
@@ -76,6 +85,7 @@ interface HistoryData {
     poNumber: string;
     billStatus: string;
     date: string;
+    searialNumber?: string | number;
 }
 
 // New interface for showing all products with same PO
@@ -86,6 +96,7 @@ interface ProductDetail {
     uom: string;
     rate: number;
     qty?: number;
+    searialNumber?: string | number;
 }
 interface EditedData {
     product?: string;
@@ -117,10 +128,10 @@ export default () => {
     const [openDialog, setOpenDialog] = useState(false);
     const [rateOptions, setRateOptions] = useState<string[]>([]);
     const [relatedProducts, setRelatedProducts] = useState<ProductDetail[]>([]);
-    const [productRates, setProductRates] = useState<{ [indentNo: string]: number }>({});
-    const [productQty, setProductQty] = useState<{ [indentNo: string]: number }>({});
-    const [editingRow, setEditingRow] = useState<string | null>(null);
-    const [editedData, setEditedData] = useState<{ [indentNo: string]: EditedData }>({});
+    const [productRates, setProductRates] = useState<{ [key: string]: number }>({});
+    const [productQty, setProductQty] = useState<{ [key: string]: number }>({});
+    const [editingRow, setEditingRow] = useState<string | number | null>(null);
+    const [editedData, setEditedData] = useState<{ [key: string]: EditedData }>({});
 
 
 
@@ -153,7 +164,8 @@ export default () => {
                 quantity: sheet.approvedQuantity,
                 uom: sheet.uom,
                 poNumber: sheet.poNumber,
-                approvedRate: sheet.approvedRate
+                approvedRate: sheet.approvedRate,
+                searialNumber: sheet.searialNumber
             }))
             .reverse();
 
@@ -173,6 +185,7 @@ export default () => {
                     uom: sheet.uom,
                     poNumber: sheet.poNumber,
                     billStatus: sheet.billStatus || 'Not Updated',
+                    searialNumber: sheet.searialNumber,
                 }))
                 .sort((a, b) => b.indentNo.localeCompare(a.indentNo))
         );
@@ -192,22 +205,27 @@ export default () => {
                 uom: sheet.uom,
                 rate: sheet.approvedRate, // Include existing rate
                 qty: sheet.qty || 0,
+                searialNumber: sheet.searialNumber,
             }));
 
             setRelatedProducts(products);
 
-            // Initialize productRates state with existing rates
-            const ratesMap: { [indentNo: string]: number } = {};
+            // Initialize productRates/productQty state with existing values
+            const ratesMap: { [key: string]: number } = {};
+            const qtyMap: { [key: string]: number } = {};
             products.forEach(p => {
-                ratesMap[p.indentNo] = p.rate;
+                const key = p.searialNumber ? String(p.searialNumber) : `${p.indentNo}-${p.product}`;
+                ratesMap[key] = p.rate;
+                qtyMap[key] = p.qty || p.quantity;
             });
             setProductRates(ratesMap);
+            setProductQty(qtyMap);
         }
     }, [selectedIndent, openDialog, indentSheet]);
-    const handleQtyChange = (indentNo: string, value: string) => {
+    const handleQtyChange = (key: string, value: string) => {
         setProductQty((prev) => ({
             ...prev,
-            [indentNo]: parseFloat(value) || 0,
+            [key]: parseFloat(value) || 0,
         }));
     };
 
@@ -286,7 +304,8 @@ export default () => {
         {
             header: 'Action',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
                 return (
                     <div className="flex gap-2">
                         {isEditing ? (
@@ -296,10 +315,12 @@ export default () => {
                                     size="sm"
                                     onClick={async () => {
                                         try {
-                                            const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                                            const sheetRow = indentSheet.find(s =>
+                                                s.searialNumber === row.original.searialNumber ||
+                                                (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                                            );
                                             if (sheetRow) {
-                                                const { timestamp, actual4, poNumber, poCopy, ...safeData } = sheetRow;
-                                                const currentEdit = editedData[row.original.indentNo];
+                                                const currentEdit = editedData[rowKey];
 
                                                 let photoUrl = sheetRow.photoOfBill || '';
 
@@ -314,8 +335,7 @@ export default () => {
                                                 await postToSheet(
                                                     [
                                                         {
-                                                            rowIndex: (sheetRow as any).rowIndex,
-                                                            indentNumber: sheetRow.indentNumber,
+                                                            ...sheetRow, // Spread existing row data
                                                             actual7: formatDate(new Date()),
                                                             billStatus: sheetRow.billStatus || 'Updated',
                                                             billNumber: currentEdit?.billNumber || sheetRow.billNumber || '',
@@ -340,7 +360,11 @@ export default () => {
                                             toast.error('Failed to update');
                                         }
                                         setEditingRow(null);
-                                        setEditedData({});
+                                        setEditedData((prev) => {
+                                            const newData = { ...prev };
+                                            delete newData[rowKey];
+                                            return newData;
+                                        });
                                     }}
 
                                 >
@@ -351,7 +375,11 @@ export default () => {
                                     size="sm"
                                     onClick={() => {
                                         setEditingRow(null);
-                                        setEditedData({});
+                                        setEditedData((prev) => {
+                                            const newData = { ...prev };
+                                            delete newData[rowKey];
+                                            return newData;
+                                        });
                                     }}
                                 >
                                     ❌ Cancel
@@ -362,22 +390,26 @@ export default () => {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
-                                    setEditingRow(row.original.indentNo);
+                                    setEditingRow(rowKey);
+                                    const sheetRow = indentSheet.find(s =>
+                                        s.searialNumber === row.original.searialNumber ||
+                                        (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                                    );
                                     setEditedData(prev => ({
                                         ...prev,
-                                        [row.original.indentNo]: {
+                                        [rowKey]: {
                                             product: row.original.product,
                                             quantity: row.original.quantity,
                                             uom: row.original.uom,
-                                            qty: row.original.quantity,
-                                            billNumber: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.billNumber || '',
-                                            leadTime: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.leadTimeToLiftMaterial || '',
-                                            typeOfBill: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.typeOfBill || '',
-                                            billAmount: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.billAmount || 0,
-                                            discountAmount: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.discountAmount || 0,
-                                            paymentType: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.paymentType || '',
-                                            advanceAmount: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.advanceAmountIfAny || 0,
-                                            rate: indentSheet.find(s => s.indentNumber === row.original.indentNo)?.approvedRate || 0,
+                                            qty: sheetRow?.qty || row.original.quantity,
+                                            billNumber: sheetRow?.billNumber || '',
+                                            leadTime: sheetRow?.leadTimeToLiftMaterial || '',
+                                            typeOfBill: sheetRow?.typeOfBill || '',
+                                            billAmount: sheetRow?.billAmount || 0,
+                                            discountAmount: sheetRow?.discountAmount || 0,
+                                            paymentType: sheetRow?.paymentType || '',
+                                            advanceAmount: sheetRow?.advanceAmountIfAny || 0,
+                                            rate: sheetRow?.approvedRate || 0,
                                         }
                                     }));
                                 }}
@@ -409,18 +441,19 @@ export default () => {
             accessorKey: 'product',
             header: 'Product',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
                 return (
                     <div className="flex items-center gap-2 max-w-[150px]">
                         {isEditing ? (
                             <Input
-                                key={row.original.indentNo}
-                                value={editedData[row.original.indentNo]?.product || ''}
+                                key={rowKey}
+                                value={editedData[rowKey]?.product || ''}
                                 onChange={(e) => {
                                     setEditedData(prev => ({
                                         ...prev,
-                                        [row.original.indentNo]: {
-                                            ...prev[row.original.indentNo],
+                                        [rowKey]: {
+                                            ...prev[rowKey],
                                             product: e.target.value,
                                         }
                                     }));
@@ -438,16 +471,17 @@ export default () => {
             accessorKey: 'quantity',
             header: 'Quantity',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editedData[row.original.indentNo]?.quantity || 0}
+                        value={editedData[rowKey]?.quantity || 0}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     quantity: parseFloat(e.target.value) || 0,
                                 }
                             }));
@@ -463,15 +497,16 @@ export default () => {
             accessorKey: 'uom',
             header: 'UOM',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
                 return isEditing ? (
                     <Input
-                        value={editedData[row.original.indentNo]?.uom || ''}
+                        value={editedData[rowKey]?.uom || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     uom: e.target.value,
                                 }
                             }));
@@ -492,16 +527,20 @@ export default () => {
             id: 'billNumber',
             header: 'Bill Number',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
-                        value={editedData[row.original.indentNo]?.billNumber || ''}
+                        value={editedData[rowKey]?.billNumber || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     billNumber: e.target.value,
                                 }
                             }));
@@ -517,17 +556,21 @@ export default () => {
             id: 'qty',
             header: 'Qty',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editedData[row.original.indentNo]?.qty || ''}
+                        value={editedData[rowKey]?.qty || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     qty: parseFloat(e.target.value) || 0,
                                 }
                             }));
@@ -543,16 +586,20 @@ export default () => {
             id: 'leadTime',
             header: 'Lead Time',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
-                        value={editedData[row.original.indentNo]?.leadTime || ''}
+                        value={editedData[rowKey]?.leadTime || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     leadTime: e.target.value,
                                 }
                             }));
@@ -568,16 +615,20 @@ export default () => {
             id: 'typeOfBill',
             header: 'Type Of Bill',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
-                        value={editedData[row.original.indentNo]?.typeOfBill || ''}
+                        value={editedData[rowKey]?.typeOfBill || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     typeOfBill: e.target.value,
                                 }
                             }));
@@ -593,17 +644,21 @@ export default () => {
             id: 'billAmount',
             header: 'Bill Amount',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editedData[row.original.indentNo]?.billAmount || ''}
+                        value={editedData[rowKey]?.billAmount || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     billAmount: parseFloat(e.target.value) || 0,
                                 }
                             }));
@@ -619,17 +674,21 @@ export default () => {
             id: 'discountAmount',
             header: 'Discount Amt',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editedData[row.original.indentNo]?.discountAmount || ''}
+                        value={editedData[rowKey]?.discountAmount || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     discountAmount: parseFloat(e.target.value) || 0,
                                 }
                             }));
@@ -645,16 +704,20 @@ export default () => {
             id: 'paymentType',
             header: 'Payment Type',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
-                        value={editedData[row.original.indentNo]?.paymentType || ''}
+                        value={editedData[rowKey]?.paymentType || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     paymentType: e.target.value,
                                 }
                             }));
@@ -670,17 +733,21 @@ export default () => {
             id: 'advanceAmount',
             header: 'Advance Amt',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editedData[row.original.indentNo]?.advanceAmount || ''}
+                        value={editedData[rowKey]?.advanceAmount || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     advanceAmount: parseFloat(e.target.value) || 0,
                                 }
                             }));
@@ -696,11 +763,12 @@ export default () => {
             id: 'photoOfBill',
             header: 'Bill Photo',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(
-                    (s) => s.indentNumber === row.original.indentNo
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
                 );
-
                 if (isEditing) {
                     return (
                         <div className="flex items-center gap-2">
@@ -715,8 +783,8 @@ export default () => {
                                         const file = e.target.files?.[0] || null;
                                         setEditedData((prev) => ({
                                             ...prev,
-                                            [row.original.indentNo]: {
-                                                ...prev[row.original.indentNo],
+                                            [rowKey]: {
+                                                ...prev[rowKey],
                                                 photoOfBillFile: file,
                                             },
                                         }));
@@ -758,17 +826,21 @@ export default () => {
             id: 'approvedRate',
             header: 'Rate',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                const sheetRow = indentSheet.find(s => s.indentNumber === row.original.indentNo);
+                const rowKey = row.original.searialNumber ? String(row.original.searialNumber) : `${row.original.indentNo}-${row.original.product}`;
+                const isEditing = editingRow === rowKey;
+                const sheetRow = indentSheet.find(s =>
+                    s.searialNumber === row.original.searialNumber ||
+                    (s.indentNumber === row.original.indentNo && s.productName === row.original.product)
+                );
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editedData[row.original.indentNo]?.rate || ''}
+                        value={editedData[rowKey]?.rate || ''}
                         onChange={(e) => {
                             setEditedData(prev => ({
                                 ...prev,
-                                [row.original.indentNo]: {
-                                    ...prev[row.original.indentNo],
+                                [rowKey]: {
+                                    ...prev[rowKey],
                                     rate: parseFloat(e.target.value) || 0,
                                 }
                             }));
@@ -843,13 +915,14 @@ export default () => {
                 indentSheet
                     .filter((s) => s.poNumber === selectedIndent?.poNumber)
                     .map((prev) => {
+                        const key = prev.searialNumber ? String(prev.searialNumber) : `${prev.indentNumber}-${prev.productName}`;
                         return {
                             rowIndex: (prev as any).rowIndex,
                             indentNumber: prev.indentNumber,
                             actual7: formatDate(new Date()),
                             billStatus: values.billStatus,
                             billNumber: values.billNo || '',
-                            qty: productQty[prev.indentNumber] || prev.approvedQuantity,
+                            qty: productQty[key] || prev.approvedQuantity,
                             leadTimeToLiftMaterial: values.leadTime || '',
                             typeOfBill: values.typeOfBill || '',
                             billAmount: values.billAmount || 0,
@@ -857,7 +930,8 @@ export default () => {
                             paymentType: values.paymentType || '',
                             advanceAmountIfAny: values.advanceAmount || 0,
                             photoOfBill: photoUrl,
-                            rate: productRates[prev.indentNumber] || prev.approvedRate || 0,
+                            rate: productRates[key] || prev.approvedRate || 0,
+                            searialNumber: prev.searialNumber
                         };
                     }),
                 'update'
@@ -913,7 +987,7 @@ export default () => {
 
 
                 {selectedIndent && (
-                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                         <Form {...form}>
                             <form
                                 onSubmit={(e) => {
@@ -931,60 +1005,46 @@ export default () => {
                                     </DialogDescription>
                                 </DialogHeader>
 
-                                <div className="space-y-2 bg-muted p-4 rounded-md">
-                                    <p className="font-semibold text-sm">Products in this PO</p>
-                                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                                        {relatedProducts.map((product, index) => (
-                                            <div
-                                                key={index}
-                                                className="bg-background p-4 rounded-md space-y-3"
-                                            >
-                                                {/* Mobile: Stack vertically */}
-                                                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                                                    <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-muted-foreground">Indent No.</p>
-                                                        <p className="text-sm font-light break-all">{product.indentNo}</p>
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-muted-foreground">Quantity</p>
-                                                        <p className="text-sm font-light">{product.quantity}</p>
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-muted-foreground">UOM</p>
-                                                        <p className="text-sm font-light">{product.uom}</p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Product name - full width */}
-                                                <div className="space-y-1">
-                                                    <p className="font-medium text-xs text-muted-foreground">Product</p>
-                                                    <p className="text-sm font-light break-words">{product.product}</p>
-                                                </div>
-
-                                                {/* Rate and Qty - side by side */}
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-muted-foreground">Approved Rate</p>
-                                                        <Input
-                                                            type="text"
-                                                            value={product.rate || 0}
-                                                            readOnly
-                                                            className="h-9 text-sm bg-gray-100 w-full font-mono"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-muted-foreground">Qty</p>
-                                                        <Input
-                                                            type="number"
-                                                            placeholder="Enter qty"
-                                                            value={productQty[product.indentNo] || ''}
-                                                            onChange={(e) => handleQtyChange(product.indentNo, e.target.value)}
-                                                            className="h-9 text-sm w-full"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                <div className="space-y-2 bg-muted p-2 rounded-md">
+                                    <p className="font-semibold text-sm px-2 py-1">Products in this PO</p>
+                                    <div className="max-h-[350px] overflow-y-auto rounded-md border bg-background">
+                                        <Table>
+                                            <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                                                <TableRow>
+                                                    <TableHead className="text-xs font-bold py-2 text-foreground">Indent No.</TableHead>
+                                                    <TableHead className="text-xs font-bold py-2 text-foreground">Product</TableHead>
+                                                    <TableHead className="text-xs font-bold py-2 text-center text-foreground">Qty</TableHead>
+                                                    <TableHead className="text-xs font-bold py-2 text-center text-foreground">UOM</TableHead>
+                                                    <TableHead className="text-xs font-bold py-2 text-right text-foreground">Appr. Rate</TableHead>
+                                                    <TableHead className="text-xs font-bold py-2 text-center min-w-[100px] text-foreground">Update Qty</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {relatedProducts.map((product, index) => {
+                                                    const key = product.searialNumber ? String(product.searialNumber) : `${product.indentNo}-${product.product}`;
+                                                    return (
+                                                        <TableRow key={index} className="hover:bg-muted/30">
+                                                            <TableCell className="text-xs py-2">{product.indentNo}</TableCell>
+                                                            <TableCell className="text-xs py-2 max-w-[150px] truncate" title={product.product}>
+                                                                {product.product}
+                                                            </TableCell>
+                                                            <TableCell className="text-xs py-2 text-center">{product.quantity}</TableCell>
+                                                            <TableCell className="text-xs py-2 text-center">{product.uom}</TableCell>
+                                                            <TableCell className="text-xs py-2 text-right font-mono">₹{product.rate || 0}</TableCell>
+                                                            <TableCell className="py-1">
+                                                                <Input
+                                                                    type="number"
+                                                                    placeholder="Qty"
+                                                                    value={productQty[key] || ''}
+                                                                    onChange={(e) => handleQtyChange(key, e.target.value)}
+                                                                    className="h-8 text-xs w-full"
+                                                                />
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
                                     </div>
                                 </div>
 
