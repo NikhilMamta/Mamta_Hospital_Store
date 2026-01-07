@@ -367,22 +367,8 @@ export default () => {
                 })
             );
 
-            // Convert logo image to base64 for PDF
-            let logoBase64 = '';
-            try {
-                const logoResponse = await fetch('/00.  Logo HD (1).png');
-                const logoBlob = await logoResponse.blob();
-                logoBase64 = await new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(logoBlob);
-                });
-            } catch (err) {
-                console.error("Logo fetch error:", err);
-            }
-
             const pdfProps: POPdfProps = {
-                companyLogo: logoBase64,
+                companyLogo: window.location.origin + '/Mamta-logo.png',
                 companyName: details?.companyName || '',
                 companyPhone: details?.companyPhone || '',
                 companyGstin: details?.companyGstin || '',
@@ -539,7 +525,7 @@ export default () => {
                     term10: values.terms[9],
                     discountPercent: v.discount || 0, // Add this
                     gstPercent: v.gst, // Add this
-                    planned: formatDate(new Date()),
+                    planned: '',
                     actual: '',
                     status: '',
                     indentBy: values.indentBy,
@@ -599,9 +585,9 @@ export default () => {
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
                             <div className="flex items-center justify-center gap-4 bg-gradient-to-br from-green-100 via-amber-50 to-green-50 rounded py-8">
                                 <img
-                                    src="/00.  Logo HD (1).png"
+                                    src="/Mamta-logo.png"
                                     alt="Company Logo"
-                                    className="w-20 h-20 object-contain"
+                                    className="w-40 h-40 object-contain"
                                 />
                                 <div className="text-center">
                                     <h1 className="text-2xl font-bold">{details?.companyName}</h1>

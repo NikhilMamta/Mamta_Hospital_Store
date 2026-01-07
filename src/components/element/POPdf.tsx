@@ -21,8 +21,8 @@ const styles = StyleSheet.create({
         paddingVertical: "12px",
     },
     logo: {
-        width: 50,
-        height: 50,
+        width: 80,
+        height: 80,
         objectFit: 'contain',
     },
     headerContent: {

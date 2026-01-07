@@ -326,7 +326,8 @@ export default () => {
                         preparedBy: selectedItem.preparedBy,
                         approvedBy: selectedItem.approvedBy,
                         indentBy: selectedItem.indentBy,
-                        finalApproved: 'Dr. Sunil Ramnani', // Update this field
+                        finalApproved: 'Dr. Sunil Ramnani',
+                        companyLogo: window.location.origin + '/Mamta-logo.png',
                     };
 
                     const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
@@ -355,7 +356,7 @@ export default () => {
             // NEW: Get all items for this PO to update
             const poItemsToUpdate = poMasterSheet.filter(p => p.poNumber === selectedItem.poNumber);
 
-            const updates = poItemsToUpdate.map(item => ({
+            const updates = poItemsToUpdate.map(({ planned, ...item }) => ({
                 ...item,
                 actual: formattedDate,           // Column AG
                 status: values.status,           // Column AI
@@ -470,7 +471,9 @@ export default () => {
                                         />
                                         <div className="flex justify-end gap-2 pt-4">
                                             <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
-                                            <Button type="submit">Submit</Button>
+                                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                                {form.formState.isSubmitting ? <Loader size={16} color="white" /> : "Submit"}
+                                            </Button>
                                         </div>
                                     </form>
                                 </Form>
